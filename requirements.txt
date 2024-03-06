@@ -1,4 +1,7 @@
-zk
-schedule
-pywin32
 configparser
+os
+pywin32
+schedule
+zk
+pystray
+pyuac

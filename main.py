@@ -1,185 +1,245 @@
-from zk import ZK
+from connection import *
+from manejo_de_archivos import *
+from datetime import datetime
+import schedule
+import sys
 import time
 import os
-from datetime import datetime
-import configparser
-'''
-import schedule
+import subprocess
 import threading
 import win32serviceutil
 import win32service
+import win32event
+import pyuac
 import servicemanager
 import socket
-import win32timezone
-import sys
+from pystray import MenuItem as item
+from pystray import Icon, Menu
+from PIL import Image
+
+# Variables globales
+logPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'service_log.txt')
 
 class MyService(win32serviceutil.ServiceFramework):
     _svc_name_ = 'MyService'
     _svc_display_name_ = 'My Service'
 
     def __init__(self, args):
+        with open(logPath, 'a') as logFile:
+            logFile.write("Service initiated...\n")
         win32serviceutil.ServiceFramework.__init__(self, args)
+        self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+        socket.setdefaulttimeout(60)
         self.is_alive = True
 
     def SvcStop(self):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+        win32event.SetEvent(self.hWaitStop)
         self.is_alive = False
 
     def SvcDoRun(self):
+        with open(logPath, 'a') as logFile:
+            logFile.write("Service started...\n")
         servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ''))
         self.main()
 
     def main(self):
+        configurar_schedule()
+        servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ''))
         while self.is_alive:
+            
+            with open(logPath, 'a') as logFile:
+                logFile.write("Service executing...\n")
             schedule.run_pending()
             time.sleep(1)
-'''
-
-# Crear el objeto ConfigParser
-config = configparser.ConfigParser()
-
-# Leer el archivo config.ini
-config.read('config.ini')
-
-# Obtener el valor de la variable 'borrarMarcacionesDelReloj'
-# borrarMarcaciones = config.getboolean('DEFAULT', 'borrarMarcacionesDelReloj', fallback=True)
-
-def conectar(ip, port):
-    zk = ZK(ip, port, timeout=5)
-    try:
-        print('Connecting to device ...')
-        conn = zk.connect()
-        print('Disabling device ...')
-        conn.disable_device()
-        conn.test_voice(index=10)
-    except Exception as e:
-        print(f'Process terminate : ', {e})
-    finally:
-        return conn
-    
-def actualizar_hora(conn):
-    # get current machine's time
-    zktime = conn.get_time()
-    print(zktime)
-    # update new time to machine
-    newtime = datetime.today()
-    conn.set_time(newtime)
-
-def obtener_marcaciones(conn):
-    attendances = []
-
-    # Imprimir el valor actual
-    # print(f'Valor actual de borrarMarcacionesDelReloj: {borrarMarcaciones}')
-    try:
-        print('Getting attendances ...')
-        attendances = conn.get_attendance()
-        conn.clear_attendance()
-    except Exception as e:
-        print(f'Process terminate : ', {e})
-    finally:
-        return attendances
-
-def crear_carpeta_y_devolver_ruta(ip):
-    # Directorio base donde se almacenarán las carpetas con la IP
-    directorioActual = os.path.dirname(os.path.abspath(__file__))
-
-    # Crear el directorio con la IP si no existe
-    rutaDestino = os.path.join(directorioActual, ip)
-    if not os.path.exists(rutaDestino):
-        os.makedirs(rutaDestino)
-        print(f"Se ha creado la carpeta {ip} en la ruta {directorioActual}")
-
-    return rutaDestino
-
-def guardar_marcaciones_en_archivo(attendances, file):
-    try:
-        with open(file, 'a') as f:
-            for attendance in attendances:
-                '''
-                print('Attendance: ', attendance)
-                print(dir(attendance))
-                for attr_name, attr_value in vars(attendance).items():
-                    print(f"{attr_name}: {type(attr_value)}")
-                '''
-                f.write(f"{attendance.user_id} {attendance.timestamp} {attendance.status} {attendance.punch}\n")
-    except Exception as e:
-        print(f'Process terminate : ', {e})
 
 def main_job():
     # Lee las IPs desde el archivo de texto
-    with open('file_ips.txt', 'r') as file_ips:
-        lineas = file_ips.readlines()
-        ips = [linea.strip() for linea in lineas]  # Elimina los saltos de línea
-
+    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'file_ips.txt')
+    ips = cargar_desde_archivo(filePath)
+        
     # Itera a través de las IPs
     for ipDevice in ips:
-
         conn = None
-        conn = conectar(ipDevice, port=4370)
+        try:
+            with open(logPath, 'a') as logFile:
+                logFile.write(f'Service connecting with device {ipDevice}...\n')
+            conn = conectar(ipDevice, port=4370)
+        except Exception as e:
+            folderPath = crear_carpeta_y_devolver_ruta(ipDevice)
+            newtime = datetime.today().date()
+            dateString = newtime.strftime("%Y-%m-%d")
+            fileName = ipDevice+'_'+dateString+'_logs.txt'
+            filePath = os.path.join(folderPath, fileName)
+            with open(filePath, 'a') as file:
+                file.write(f'Connection failed with device {ipDevice}: ', e)
+
         if conn:
             # FECHA
             newtime = datetime.today().date()
             dateString = newtime.strftime("%Y-%m-%d")
-            print(f'Procesando IP: {ipDevice}, Fecha: {dateString}')
+            print(f'Processing IP: {ipDevice}, Date: {dateString}')
             actualizar_hora(conn)
 
             # CARPETA
-            rutaCarpeta = crear_carpeta_y_devolver_ruta(ipDevice)
-            
+            folderPath = crear_carpeta_y_devolver_ruta(ipDevice)
+                
             # MARCACIONES
-            attendancesFilePerDevice = ipDevice+'_'+dateString+'_file.cro'
-            rutaDestino = os.path.join(rutaCarpeta, attendancesFilePerDevice)
+            fileName = ipDevice+'_'+dateString+'_file.cro'
+            destinyPath = os.path.join(folderPath, fileName)
             attendances = obtener_marcaciones(conn)
             print('Attendances: ', attendances)
-            guardar_marcaciones_en_archivo(attendances, rutaDestino)
+            guardar_marcaciones_en_archivo(attendances, destinyPath)
 
-            attendancesFile = 'attendances_file.txt'
-            rutaCarpeta = os.path.dirname(os.path.abspath(__file__))
-            rutaDestino = os.path.join(rutaCarpeta, attendancesFile)
-            guardar_marcaciones_en_archivo(attendances, rutaDestino)
+            fileName = 'attendances_file.txt'
+            folderPath = os.path.dirname(os.path.abspath(__file__))
+            destinyPath = os.path.join(folderPath, fileName)
+            guardar_marcaciones_en_archivo(attendances, destinyPath)
 
-            print('Enabling device ...')
+            print('Enabling device...')
             conn.enable_device()
-            print('Disconnecting device ...')
+            print('Disconnecting device...')
             conn.disconnect()
 
-'''
-def main_job():
-    conn = None
-    ipDevice = '192.168.100.125'
-    newtime = datetime.today().date()
-    dateString = newtime.strftime("%Y-%m-%d")
-    print(dateString)
-    rutaCarpeta = crear_carpeta_y_devolver_ruta(ipDevice)
-    attendancesFile = ipDevice+'_'+dateString+'_registro.cro'
-    rutaDestino = os.path.join(rutaCarpeta, attendancesFile)
-    conn = conectar(ipDevice, port=4370)
-    if conn:
-        actualizar_hora(conn)
-        attendances = obtener_marcaciones(conn)
-        guardar_marcaciones(attendances, rutaDestino)
-        conn.enable_device()
-        conn.disconnect()
-'''
-'''
-def main():
-    schedule.every().day.at("04:00").do(main_job)
-    schedule.every().day.at("06:00").do(main_job)
-    schedule.every().day.at("08:37").do(main_job)
+def configurar_schedule():
+    '''
+    Configura las tareas programadas en base a las horas cargadas desde el archivo.
+    '''
 
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    # Lee las horas de ejecución desde el archivo de texto
+    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schedule.txt')
+    hoursToPerform = cargar_desde_archivo(filePath)
+        
+    # Itera las horas de ejecución
+    for hourToPerform in hoursToPerform:
+        '''
+        Ejecuta la tarea de actualizar hora y guardar las 
+        marcaciones en archivos (individual y en conjunto)
+        en la hora especificada en .at
+        '''
+
+        schedule.every().day.at(hourToPerform).do(main_job)
+
+def exit_icon(icon, item):
+    stop_service(icon)
+    icon.stop()
+
+def start_service(icon):
+    if pyuac.isUserAdmin():
+        set_icon_color(icon, "green")
+        subprocess.run(["net", "start", "MyService"], shell=True)
+
+def stop_service(icon):
+    set_icon_color(icon, "red")
+    subprocess.run(["net", "stop", "MyService"], shell=True)
+
+def set_icon_color(icon, color):
+    # Función para cambiar el color del ícono
+    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"circle-{color}.png")
+    image = Image.open(filePath)
+    icon.update_menu()
+    icon.icon = image
+
+def restart_service(icon):
+    stop_service(icon)
+    start_service(icon)
+
+def item_actualizar_hora(icon, item):
+    # Lee las IPs desde el archivo de texto
+    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'file_ips.txt')
+    ips = cargar_desde_archivo(filePath)
+        
+    # Itera a través de las IPs
+    for ipDevice in ips:
+        conn = None
+        with open(logPath, 'a') as logFile:
+            logFile.write(f'Service trying to connect with device {ipDevice}...\n')
+        try:
+            conn = conectar(ipDevice, port=4370)
+        except Exception as e:
+            folderPath = crear_carpeta_y_devolver_ruta(ipDevice)
+            newtime = datetime.today().date()
+            dateString = newtime.strftime("%Y-%m-%d")
+            fileName = ipDevice+'_'+dateString+'_logs.txt'
+            filePath = os.path.join(folderPath, fileName)
+            with open(filePath, 'a') as file:
+                file.write(f'Connection failed with device {ipDevice}: {e.args}')
+        if conn:
+            # FECHA
+            newtime = datetime.today().date()
+            dateString = newtime.strftime("%Y-%m-%d")
+            print(f'Processing IP: {ipDevice}, Date: {dateString}')
+            actualizar_hora(conn)
+
+            print('Enabling device...')
+            conn.enable_device()
+            print('Disconnecting device...')
+            conn.disconnect()
+
+# Crear ícono en la bandeja del sistema
+def create_tray_icon():
+    initial_color = "green" if is_service_running() else "red"
+    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"circle-{initial_color}.png")
+    image = Image.open(filePath)
+
+    icon = Icon("MyService", image, "Gestor de Reloj de Asistencias", menu=Menu(
+        item('Iniciar', start_service),
+        item('Detener', stop_service),
+        item('Actualizar hora', item_actualizar_hora),
+        item('Obtener marcaciones', main_job),
+        item('Salir', exit_icon)
+    ))
+
+    return icon
+
+def is_service_running():
+    # Comando para verificar si el servicio está en ejecución
+    result = subprocess.run(["sc", "query", "MyService"], capture_output=True, text=True)
+    return "STATE" in result.stdout or "ESTADO" in result.stdout and "RUNNING" in result.stdout
+
+@pyuac.main_requires_admin
+def main():
+    with open(logPath, 'a') as logFile:
+        logFile.write('Script executing...\n')
+
+    logFilePath = 'console_log.txt'
+
+    # Redirigir salida estándar y de error al archivo de registro
+    sys.stdout = open(logFilePath, 'a')
+    sys.stderr = open(logFilePath, 'a')
+
+    if len(sys.argv) == 1:
+        tray_icon = create_tray_icon()
+        tray_icon.run()
+        # servicemanager.Initialize()
+        # servicemanager.PrepareToHostSingle(MyService)
+        # servicemanager.StartServiceCtrlDispatcher()
+    else:
+        win32serviceutil.HandleCommandLine(MyService)
 
 if __name__ == '__main__':
+    main()
+
+
+#threading.Thread(target=tray_icon.run).start()
+#systernals paquete de wind
+'''
+if __name__ == '__main__':
+    with open(logPath, 'a') as logFile:
+        logFile.write('Script executing...\n')
+
+    logFilePath = 'console_log.txt'
+
+    # Redirigir salida estándar y de error al archivo de registro
+    sys.stdout = open(logFilePath, 'a')
+    sys.stderr = open(logFilePath, 'a')
+
+    print(sys.argv)
+
     if len(sys.argv) == 1:
         servicemanager.Initialize()
         servicemanager.PrepareToHostSingle(MyService)
         servicemanager.StartServiceCtrlDispatcher()
-        print('hola')
     else:
         win32serviceutil.HandleCommandLine(MyService)
 '''
-
-if __name__ == '__main__':
-    main_job()
