@@ -1,20 +1,27 @@
 from zk import ZK
 from datetime import datetime
-import os
-logPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'service_log.txt')
+from errors import ConexionFallida
+from utils import logging
 
 def conectar(ip, port):
-    zk = ZK(ip, port, timeout=5)
     try:
-        print('Connecting to device...')
+        zk = ZK(ip, port, timeout=5)
+        conn = None
+        logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
-        print('Disabling device...')
+        logging.info('Disabling device...')
         conn.disable_device()
         conn.test_voice(index=10)
-    except Exception as e:
-        raise e
+    except ConexionFallida as e:
+        raise e(ip)
     finally:
         return conn
+
+def finalizar_conexion(conn):
+    logging.info('Enabling device...')
+    conn.enable_device()
+    logging.info('Disconnecting device...')
+    conn.disconnect()
     
 def actualizar_hora(conn):
     # get current machine's time
@@ -27,10 +34,10 @@ def actualizar_hora(conn):
 def obtener_marcaciones(conn):
     attendances = []
     try:
-        print('Getting attendances...')
+        logging.info('Getting attendances...')
         attendances = conn.get_attendance()
         conn.clear_attendance()
     except Exception as e:
-        print(f'Process terminate: ', e)
+        logging.error(f'Process terminate: {e}')
     finally:
         return attendances

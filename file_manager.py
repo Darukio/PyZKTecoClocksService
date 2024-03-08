@@ -1,4 +1,6 @@
 import os
+from utils import logging
+from errors import CargaArchivoFallida
 
 def cargar_desde_archivo(filePath):
     '''
@@ -14,8 +16,8 @@ def cargar_desde_archivo(filePath):
     try:
         with open(filePath, 'r') as file:
             content = [line.strip() for line in file.readlines()] # Elimina los saltos de línea
-    except Exception as e:
-        print(f'Error al cargar el contenido desde el archivo: {e}')
+    except CargaArchivoFallida as e:
+        logging.error(e)
     return content
 
 def crear_carpeta_y_devolver_ruta(ip):
@@ -28,7 +30,7 @@ def crear_carpeta_y_devolver_ruta(ip):
     rutaDestino = os.path.join(directorioDispositivos, ip)
     if not os.path.exists(rutaDestino):
         os.makedirs(rutaDestino)
-        print(f'Se ha creado la carpeta {ip} en la ruta {directorioActual}')
+        logging.debug(f'Se ha creado la carpeta {ip} en la ruta {directorioActual}')
 
     return rutaDestino
 
@@ -46,5 +48,5 @@ def guardar_marcaciones_en_archivo(attendances, file):
                 formatted_timestamp = attendance.timestamp.strftime("%d/%m/%Y %H:%M") # Formatea el timestamp a DD/MM/YYYY hh:mm, ejemplo: 21/07/2023 05:28
                 f.write(f"{attendance.user_id} {formatted_timestamp} {attendance.status} {attendance.punch}\n")
     except Exception as e:
-        print(f'Process terminate: ', {e})
+        logging.error(f'Process terminate: {e}')
         

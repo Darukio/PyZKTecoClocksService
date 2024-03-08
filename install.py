@@ -1,13 +1,14 @@
 import subprocess
+import pyuac
 
-print('Checking Dependencies...')
+@pyuac.main_requires_admin
+def main():
+    print('Checking Dependencies...')
 
-# Comando que quieres ejecutar en modo administrador
-comando = '''
-python -m pip install -q -r requirements.txt &
-python main.py install &
-python main.py start
-'''
+    # Comando que quieres ejecutar
+    comando = 'python -m pip install -q -r requirements.txt && python main.py install'
 
-# Ejecutar el comando en modo administrador
-subprocess.run(f'runas /user:Administrator {comando}', shell=True)
+    subprocess.run(comando, shell=True)
+
+if __name__ == '__main__':
+    main()
