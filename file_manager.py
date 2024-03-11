@@ -17,7 +17,7 @@ def cargar_desde_archivo(filePath):
         with open(filePath, 'r') as file:
             content = [line.strip() for line in file.readlines()] # Elimina los saltos de línea
     except CargaArchivoFallida as e:
-        logging.error(e)
+        raise(e)
     return content
 
 def crear_carpeta_y_devolver_ruta(ip):

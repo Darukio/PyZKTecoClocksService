@@ -1,14 +1,22 @@
 import subprocess
-import pyuac
+import sys
+import os
+import shutil
 
-@pyuac.main_requires_admin
-def main():
-    print('Checking Dependencies...')
+def install_requirements():
+    # Borrar la carpeta venv si ya existe
+    venv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv")
+    if os.path.exists(venv_path):
+        shutil.rmtree(venv_path)
 
-    # Comando que quieres ejecutar
-    comando = 'python -m pip install -q -r requirements.txt && python main.py install'
+    # Crear un entorno virtual
+    subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
-    subprocess.run(comando, shell=True)
+    # Obtener la ruta al ejecutable de Python en el entorno virtual
+    venv_python = os.path.join(venv_path, "Scripts", "python.exe") if sys.platform == "win32" else os.path.join(venv_path, "bin", "python")
 
-if __name__ == '__main__':
-    main()
+    # Instalar dependencias desde requirements.txt usando el pip del entorno virtual
+    subprocess.run([venv_python, "-m", "pip", "install", "-r", "requirements.txt"], check=True)
+
+if __name__ == "__main__":
+    install_requirements()

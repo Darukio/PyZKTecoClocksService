@@ -1,7 +1,6 @@
-configparser
-os
 pywin32
 schedule
-zk
+pyzk
 pystray
 pyuac
+pyinstaller

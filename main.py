@@ -7,7 +7,7 @@ from utils import logging
 
 @pyuac.main_requires_admin
 def main():
-    logging.debug('Script executing...\n')
+    logging.debug('Script executing...')
 
     logFilePath = 'console_log.txt'
 

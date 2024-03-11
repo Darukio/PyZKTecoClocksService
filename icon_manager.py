@@ -40,12 +40,12 @@ def exit_icon(icon, item):
 def start_service(icon):
     # Función para iniciar el servicio en segundo plano
     set_icon_color(icon, "green")
-    subprocess.run(["net", "start", "GestorRelojAsistencias"], shell=True)
+    subprocess.run(["net", "start", "\"GestorRelojAsistencias\""], shell=True)
 
 def stop_service(icon):
     # Función para detener el servicio
     set_icon_color(icon, "red")
-    subprocess.run(["net", "stop", "GestorRelojAsistencias"], shell=True)
+    subprocess.run(["net", "stop", "\"GestorRelojAsistencias\""], shell=True)
 
 def restart_service(icon):
     # Función para reiniciar el servicio

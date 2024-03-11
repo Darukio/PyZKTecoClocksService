@@ -42,8 +42,9 @@ class GestorRelojAsistencias(win32serviceutil.ServiceFramework):
 
 def is_service_running():
     # Comando para verificar si el servicio está en ejecución
-    result = subprocess.run(["sc", "query", "GestorRelojAsistencias"], capture_output=True, text=True)
-    return "STATE" in result.stdout or "ESTADO" in result.stdout and "RUNNING" in result.stdout
+    result = subprocess.run(["sc.exe", "query", "GestorRelojAsistencias"], capture_output=True, text=True)
+    logging.debug(result)
+    return ("STATE" in result.stdout or "ESTADO" in result.stdout) and "RUNNING" in result.stdout
 
 def configurar_schedule():
     '''
@@ -52,14 +53,19 @@ def configurar_schedule():
 
     # Lee las horas de ejecución desde el archivo de texto
     filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schedule.txt')
-    hoursToPerform = cargar_desde_archivo(filePath)
-        
-    # Itera las horas de ejecución
-    for hourToPerform in hoursToPerform:
-        '''
-        Ejecuta la tarea de actualizar hora y guardar las 
-        marcaciones en archivos (individual y en conjunto)
-        en la hora especificada en .at
-        '''
+    hoursToPerform = None
+    try:
+        hoursToPerform = cargar_desde_archivo(filePath)
+    except Exception as e:
+        logging.error(e)
 
-        schedule.every().day.at(hourToPerform).do(gestionar_marcaciones_dispositivos)
+    if hoursToPerform: 
+        # Itera las horas de ejecución
+        for hourToPerform in hoursToPerform:
+            '''
+            Ejecuta la tarea de actualizar hora y guardar las 
+            marcaciones en archivos (individual y en conjunto)
+            en la hora especificada en .at
+            '''
+
+            schedule.every().day.at(hourToPerform).do(gestionar_marcaciones_dispositivos)
