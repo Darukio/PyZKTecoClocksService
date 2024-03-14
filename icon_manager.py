@@ -17,21 +17,25 @@ def create_tray_icon():
     initial_color = "green" if is_service_running() else "red"
     filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"circle-{initial_color}.png")
     image = Image.open(filePath)
-
-    icon = Icon("GestorRelojAsistencias", image, "Gestor Reloj de Asistencias", menu=Menu(
-        item('Iniciar', start_service),
-        item('Detener', stop_service),
-        item('Reiniciar', restart_service),
-        item('Actualizar hora', actualizar_hora_dispositivos),
-        item('Obtener marcaciones', gestionar_marcaciones_dispositivos),
-        item('Salir', exit_icon)
-    ))
+    
+    try:
+        icon = Icon("GestorRelojAsistencias", image, "Gestor Reloj de Asistencias", menu=Menu(
+            item('Iniciar', start_service),
+            item('Detener', stop_service),
+            item('Reiniciar', restart_service),
+            item('Actualizar hora', actualizar_hora_dispositivos),
+            item('Obtener marcaciones', gestionar_marcaciones_dispositivos),
+            item('Salir', exit_icon)
+        ))
+    except Exception as e:
+        logging.error(e)
 
     return icon
 
 def exit_icon(icon, item):
     # Función para salir del programa
-    stop_service(icon)
+    if is_service_running():
+        stop_service(icon)
     try:
         icon.stop()
     except Exception as e:
@@ -39,13 +43,16 @@ def exit_icon(icon, item):
 
 def start_service(icon):
     # Función para iniciar el servicio en segundo plano
-    set_icon_color(icon, "green")
-    subprocess.run(["net", "start", "\"GestorRelojAsistencias\""], shell=True)
+    try:
+        set_icon_color(icon, "green")
+        subprocess.run(["net", "start", "GestorRelojAsistencias"], shell=True)
+    except Exception as e:
+        logging.error(e)
 
 def stop_service(icon):
     # Función para detener el servicio
     set_icon_color(icon, "red")
-    subprocess.run(["net", "stop", "\"GestorRelojAsistencias\""], shell=True)
+    subprocess.run(["net", "stop", "GestorRelojAsistencias"], shell=True)
 
 def restart_service(icon):
     # Función para reiniciar el servicio

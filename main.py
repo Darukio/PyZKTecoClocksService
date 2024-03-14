@@ -1,8 +1,7 @@
+
 import sys
-import win32serviceutil
 import pyuac
 from icon_manager import create_tray_icon
-from service import GestorRelojAsistencias
 from utils import logging
 
 @pyuac.main_requires_admin
@@ -18,11 +17,6 @@ def main():
     if len(sys.argv) == 1:
         tray_icon = create_tray_icon()
         tray_icon.run()
-        # servicemanager.Initialize()
-        # servicemanager.PrepareToHostSingle(GestorRelojAsistencias)
-        # servicemanager.StartServiceCtrlDispatcher()
-    else:
-        win32serviceutil.HandleCommandLine(GestorRelojAsistencias)
 
 if __name__ == '__main__':
     main()

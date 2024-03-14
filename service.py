@@ -7,6 +7,7 @@ import win32service
 import win32event
 import servicemanager
 import socket
+import sys
 from tasks_device_manager import gestionar_marcaciones_dispositivos
 from file_manager import cargar_desde_archivo
 from utils import logging
@@ -17,28 +18,48 @@ class GestorRelojAsistencias(win32serviceutil.ServiceFramework):
 
     def __init__(self, args):
         logging.debug('Service initiated...')
-        win32serviceutil.ServiceFramework.__init__(self, args)
-        self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
-        socket.setdefaulttimeout(60)
-        self.is_alive = True
+        try:
+            win32serviceutil.ServiceFramework.__init__(self, args)
+            self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+            socket.setdefaulttimeout(60)
+            self.is_alive = True
+        except Exception as e:
+            logging.error(e)
 
     def SvcStop(self):
-        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
-        win32event.SetEvent(self.hWaitStop)
-        self.is_alive = False
+        try:
+            self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+            win32event.SetEvent(self.hWaitStop)
+            self.is_alive = False
+        except Exception as e:
+            logging.error(e)
 
     def SvcDoRun(self):
-        logging.debug('Service started...')
-        servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ''))
-        self.main()
+        try:
+            logging.debug('Service started...')
+            servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ''))
+            self.main()
+        except Exception as e:
+            logging.error(e)
 
     def main(self):
-        configurar_schedule()
-        servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ''))
-        while self.is_alive:
-            logging.debug('Service executing...')
-            schedule.run_pending()
-            time.sleep(1)
+        try:
+            configurar_schedule()
+            servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ''))
+            while self.is_alive:
+                logging.debug('Service executing...')
+                schedule.run_pending()
+                time.sleep(1)
+        except Exception as e:
+            raise(e)
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(GestorRelojAsistencias)
+        servicemanager.StartServiceCtrlDispatcher()
+    else:
+        win32serviceutil.HandleCommandLine(GestorRelojAsistencias)
 
 def is_service_running():
     # Comando para verificar si el servicio está en ejecución
