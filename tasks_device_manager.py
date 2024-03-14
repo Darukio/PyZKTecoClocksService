@@ -27,13 +27,13 @@ def gestionar_marcaciones_dispositivos():
                 logging.info(f'Processing IP: {ipDevice}')
                 actualizar_hora(conn)
                 attendances = obtener_marcaciones(conn)
-                logging.info('Attendances: ', attendances)
+                logging.info(f'Attendances: {attendances}')
                 gestionar_marcaciones_individual(ipDevice, attendances)
                 gestionar_marcaciones_global(attendances)
                 finalizar_conexion(conn)
 
 def gestionar_marcaciones_individual(ipDevice, attendances):
-    folderPath = crear_carpeta_y_devolver_ruta(ipDevice)
+    folderPath = crear_carpeta_y_devolver_ruta('devices', ipDevice)
     newtime = datetime.today().date()
     dateString = newtime.strftime("%Y-%m-%d")
     fileName = ipDevice+'_'+dateString+'_file.cro'
@@ -46,7 +46,7 @@ def gestionar_marcaciones_global(attendances):
 
 def gestionar_guardado_de_marcaciones(attendances, folderPath, fileName):
     destinyPath = os.path.join(folderPath, fileName)
-    logging.debug('DestinyPath: ', destinyPath)
+    logging.debug(f'DestinyPath: {destinyPath}')
     guardar_marcaciones_en_archivo(attendances, destinyPath)
 
 def actualizar_hora_dispositivos():

@@ -1,25 +1,28 @@
-import datetime
+from datetime import datetime
 import os
-import importlib
+import logging
 
 class ConexionFallida(Exception):
     def __init__(self, ipDevice):
+        super().__init__()
         try:
-            # Importa el módulo errors de manera dinámica
             from file_manager import crear_carpeta_y_devolver_ruta
-            folderPath = crear_carpeta_y_devolver_ruta(ipDevice)
+            # Call the function from the imported module
+            folderPath = crear_carpeta_y_devolver_ruta('devices', 'errors')
             newtime = datetime.today().date()
             dateString = newtime.strftime("%Y-%m-%d")
-            fileName = ipDevice+'_'+dateString+'_logs.txt'
+            logging.debug(dateString)
+            fileName = f'errors_{dateString}.txt'
+            logging.debug(fileName)
             filePath = os.path.join(folderPath, fileName)
-            self.mensaje = f'Conexión fallida con {ipDevice}: {Exception}' 
+            hourString = datetime.now().strftime("%H:%M:%S")
+            self.mensaje = f'{hourString} Conexion fallida con {ipDevice}\n' 
             with open(filePath, 'a') as file:
                 file.write(self.mensaje)
-            super().__init__(self.mensaje)
-        except ImportError:
-            pass
+        except Exception as e:
+            logging.error(e)
     
 class CargaArchivoFallida(Exception):
     def __init__(self, filePath):
-        self.mensaje = f'Carga fallida del archivo {filePath}: {Exception}' 
+        self.mensaje = f'Carga fallida del archivo {filePath}: {str(Exception)}' 
         super().__init__(self.mensaje)

@@ -1,6 +1,5 @@
 import os
 from utils import logging
-from errors import CargaArchivoFallida
 
 def cargar_desde_archivo(filePath):
     '''
@@ -12,6 +11,8 @@ def cargar_desde_archivo(filePath):
     Returns:
     - List[str]: Lista del contenido del archivo.
     '''
+    from errors import CargaArchivoFallida
+
     content = []
     try:
         with open(filePath, 'r') as file:
@@ -20,17 +21,24 @@ def cargar_desde_archivo(filePath):
         raise(e)
     return content
 
-def crear_carpeta_y_devolver_ruta(ip):
+def crear_carpeta_y_devolver_ruta(carpeta1, carpeta2=None):
     # Directorio base donde se almacenarán las carpetas con la IP
     directorioActual = os.path.dirname(os.path.abspath(__file__))
-    
-    directorioDispositivos = os.path.join(directorioActual, 'devices')
 
-    # Crear el directorio con la IP si no existe
-    rutaDestino = os.path.join(directorioDispositivos, ip)
+    if carpeta2:
+        rutaCarpeta1 = os.path.join(directorioActual, carpeta1)
+        if not os.path.exists(rutaCarpeta1):
+            os.makedirs(rutaCarpeta1)
+            logging.debug(f'Se ha creado la carpeta {carpeta1} en la ruta {directorioActual}')
+            logging.debug(rutaCarpeta1)
+        rutaDestino = os.path.join(os.path.join(directorioActual, carpeta1), carpeta2)
+        logging.debug(os.path.join(os.path.join(directorioActual, carpeta1), carpeta2))
+    else:
+        rutaDestino = os.path.join(directorioActual, carpeta1)
+    logging.debug(rutaDestino)
     if not os.path.exists(rutaDestino):
         os.makedirs(rutaDestino)
-        logging.debug(f'Se ha creado la carpeta {ip} en la ruta {directorioActual}')
+        logging.debug(f'Se ha creado la carpeta {carpeta2} en la ruta {directorioActual}')
 
     return rutaDestino
 
@@ -49,4 +57,8 @@ def guardar_marcaciones_en_archivo(attendances, file):
                 f.write(f"{attendance.user_id} {formatted_timestamp} {attendance.status} {attendance.punch}\n")
     except Exception as e:
         logging.error(f'Process terminate: {e}')
-        
+
+def obtener_directorio_deseado(folder):
+    directorioActual = os.path.dirname(os.path.abspath(__file__))
+    folderPath = os.path.join(directorioActual, folder)
+    return folderPath

@@ -12,8 +12,9 @@ def conectar(ip, port):
         logging.info('Disabling device...')
         conn.disable_device()
         conn.test_voice(index=10)
-    except ConexionFallida as e:
-        raise e(ip)
+    except Exception as e:
+        logging.warning(e)
+        raise ConexionFallida(ip)
     finally:
         return conn
 
