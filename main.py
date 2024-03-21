@@ -1,7 +1,7 @@
 
 import sys
 import pyuac
-from icon_manager import create_tray_icon
+from icon_manager import TrayApp
 from utils import logging
 
 @pyuac.main_requires_admin
@@ -15,8 +15,8 @@ def main():
     sys.stderr = open(logFilePath, 'a')
 
     if len(sys.argv) == 1:
-        tray_icon = create_tray_icon()
-        tray_icon.run()
+        app = TrayApp()
+        app.icon.run()
 
 if __name__ == '__main__':
     main()
