@@ -110,7 +110,7 @@ venv.bak/
 # Data
 /devices
 attendances_file.txt
-file_ips.txt
+info_devices.txt
 schedule.txt
 service_log.txt
 console_log.txt

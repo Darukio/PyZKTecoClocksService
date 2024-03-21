@@ -22,7 +22,7 @@ python configure_startup.py
 # Ejecutar main.exe
 ```
 
-### Instalación de seriptvice.py como servicio
+### Instalación de service.py como servicio
 
 ```bash
 # Ejecutar en la consola con permisos de admin

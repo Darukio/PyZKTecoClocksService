@@ -5,38 +5,64 @@ from errors import ConexionFallida
 from utils import logging
 import os
 
+def organizar_info_dispositivos(line):
+    # Dividir la línea en partes utilizando el separador " - "
+    parts = line.strip().split(" - ")
+    # Verificar que hay exactamente 4 partes en la línea
+    if len(parts) == 5:
+        return {
+            "nombreDistrito": parts[0],
+            "nombreModelo": parts[1],
+            "puntoMarcacion": parts[2],
+            "ip": parts[3],
+            "activo": parts[4]
+        }
+    else:
+        # Si no hay exactamente 4 partes, retornar None
+        return None
+
+def obtener_info_dispositivos(filePath):
+    dataList = cargar_desde_archivo(filePath)
+    infoDevices = None
+    for data in dataList:
+        line = organizar_info_dispositivos(data)
+        if line:
+            infoDevices.append(line)
+    return infoDevices
+
 def gestionar_marcaciones_dispositivos():
     # Lee las IPs desde el archivo de texto
-    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'file_ips.txt')
-    ips = None
+    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'devices_file.txt')
+    infoDevices = None
     try:
-        ips = cargar_desde_archivo(filePath)
+        infoDevices = obtener_info_dispositivos(filePath)
     except Exception as e:
         logging.error(e)
 
-    if ips:     
+    if infoDevices:
         # Itera a través de las IPs
-        for ipDevice in ips:
-            conn = None
-            try:
-                conn = conectar(ipDevice, port=4370)
-            except ConexionFallida as e:
-                logging.error(e)
+        for infoDevice in infoDevices:
+            if eval(infoDevice.activo) == True:
+                conn = None
+                try:
+                    conn = conectar(infoDevice.ip, port=4370)
+                except ConexionFallida as e:
+                    logging.error(e)
 
-            if conn:
-                logging.info(f'Processing IP: {ipDevice}')
-                actualizar_hora(conn)
-                attendances = obtener_marcaciones(conn)
-                logging.info(f'Attendances: {attendances}')
-                gestionar_marcaciones_individual(ipDevice, attendances)
-                gestionar_marcaciones_global(attendances)
-                finalizar_conexion(conn)
+                if conn:
+                    logging.info(f'Processing IP: {infoDevice.ip}')
+                    actualizar_hora(conn)
+                    attendances = obtener_marcaciones(conn)
+                    logging.info(f'Attendances: {attendances}')
+                    gestionar_marcaciones_individual(infoDevice, attendances)
+                    gestionar_marcaciones_global(attendances)
+                    finalizar_conexion(conn)
 
-def gestionar_marcaciones_individual(ipDevice, attendances):
-    folderPath = crear_carpeta_y_devolver_ruta('devices', ipDevice)
+def gestionar_marcaciones_individual(infoDevice, attendances):
+    folderPath = crear_carpeta_y_devolver_ruta('devices', infoDevice.nombreDistrito, infoDevice.puntoMarcacion)
     newtime = datetime.today().date()
     dateString = newtime.strftime("%Y-%m-%d")
-    fileName = ipDevice+'_'+dateString+'_file.cro'
+    fileName = infoDevice.ip+'_'+dateString+'_file.cro'
     gestionar_guardado_de_marcaciones(attendances, folderPath, fileName)
 
 def gestionar_marcaciones_global(attendances):
@@ -51,18 +77,24 @@ def gestionar_guardado_de_marcaciones(attendances, folderPath, fileName):
 
 def actualizar_hora_dispositivos():
     # Lee las IPs desde el archivo de texto
-    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'file_ips.txt')
-    ips = cargar_desde_archivo(filePath)
-        
-    # Itera a través de las IPs
-    for ipDevice in ips:
-        conn = None
-        try:
-            conn = conectar(ipDevice, port=4370)
-        except ConexionFallida as e:
-            logging.error(e)
+    filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'info_devices.txt')
+    infoDevices = None
+    try:
+        infoDevices = obtener_info_dispositivos(filePath)
+    except Exception as e:
+        logging.error(e)
 
-        if conn:
-            logging.info(f'Processing IP: {ipDevice}')
-            actualizar_hora(conn)
-            finalizar_conexion(conn)
+    if infoDevices:
+        # Itera a través de las IPs
+        for infoDevice in infoDevices:
+            if eval(infoDevice.activo) == True:
+                conn = None
+                try:
+                    conn = conectar(infoDevice.ip, port=4370)
+                except ConexionFallida as e:
+                    logging.error(e)
+
+                if conn:
+                    logging.info(f'Processing IP: {infoDevice.ip}')
+                    actualizar_hora(conn)
+                    finalizar_conexion(conn)

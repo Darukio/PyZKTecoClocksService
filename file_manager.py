@@ -21,7 +21,7 @@ def cargar_desde_archivo(filePath):
         raise(e)
     return content
 
-def crear_carpeta_y_devolver_ruta(carpeta1, carpeta2=None):
+def crear_carpeta_y_devolver_ruta(carpeta1, carpeta2=None, carpeta3=None):
     # Directorio base donde se almacenarán las carpetas con la IP
     directorioActual = os.path.dirname(os.path.abspath(__file__))
 

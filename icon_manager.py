@@ -1,5 +1,5 @@
 import os
-import subprocess
+import time
 import schedule
 from pystray import MenuItem as item
 from pystray import Icon, Menu
@@ -61,8 +61,8 @@ class TrayApp:
         return icon
 
     def set_icon_color(self, icon, color):
-        self.colorIcon = color
         # Función para cambiar el color del ícono
+        self.colorIcon = color
         filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"circle-{self.colorIcon}.png")
         image = Image.open(filePath)
         icon.update_menu()
