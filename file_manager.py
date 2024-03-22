@@ -21,25 +21,17 @@ def cargar_desde_archivo(filePath):
         raise(e)
     return content
 
-def crear_carpeta_y_devolver_ruta(carpeta1, carpeta2=None, carpeta3=None):
+def crear_carpeta_y_devolver_ruta(*args):
     # Directorio base donde se almacenarán las carpetas con la IP
     directorioActual = os.path.dirname(os.path.abspath(__file__))
-
-    if carpeta2:
-        rutaCarpeta1 = os.path.join(directorioActual, carpeta1)
-        if not os.path.exists(rutaCarpeta1):
-            os.makedirs(rutaCarpeta1)
-            logging.debug(f'Se ha creado la carpeta {carpeta1} en la ruta {directorioActual}')
-            logging.debug(rutaCarpeta1)
-        rutaDestino = os.path.join(os.path.join(directorioActual, carpeta1), carpeta2)
-        logging.debug(os.path.join(os.path.join(directorioActual, carpeta1), carpeta2))
-    else:
-        rutaDestino = os.path.join(directorioActual, carpeta1)
-    logging.debug(rutaDestino)
-    if not os.path.exists(rutaDestino):
-        os.makedirs(rutaDestino)
-        logging.debug(f'Se ha creado la carpeta {carpeta2} en la ruta {directorioActual}')
-
+    rutaDestino = directorioActual
+    
+    for index, carpeta in enumerate(args, start=1):
+        rutaDestino = os.path.join(rutaDestino, carpeta)
+        if not os.path.exists(rutaDestino):
+            os.makedirs(rutaDestino)
+            logging.debug(f'Se ha creado la carpeta {carpeta} en la ruta {rutaDestino}')
+    
     return rutaDestino
 
 def guardar_marcaciones_en_archivo(attendances, file):
