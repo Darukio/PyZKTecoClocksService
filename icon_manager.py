@@ -12,26 +12,38 @@ import threading
 class TrayApp:
     def __init__(self):
         self.is_running = False
+        self.schedule_thread = None
         self.colorIcon = "red"
         self.icon = self.create_tray_icon()
+        self.configurar_schedule(self.icon)
 
     def start_execution(self, icon):
         self.is_running = True
-        self.configurar_schedule()
         self.set_icon_color(icon, "green")
         # Inicia un hilo para ejecutar run_pending() en segundo plano
-        threading.Thread(target=self.run_schedule).start()
+        try:
+            self.schedule_thread = threading.Thread(target=self.run_schedule)
+            logging.debug('Hilo iniciado...')
+            self.schedule_thread.start()
+        except Exception as e:
+            logging.critical(e)
 
     def run_schedule(self):
         # Función para ejecutar run_pending() en segundo plano
-        while self.is_running:
-            logging.debug('Service executing...')
-            schedule.run_pending()
-            time.sleep(1)
+        try:
+            while self.is_running:
+                logging.debug('Hilo en ejecucion...')
+                schedule.run_pending()
+                time.sleep(1)
+        except Exception as e:
+            logging.error(e)
 
     def stop_execution(self, icon):
         self.is_running = False
-        schedule.clear()
+        if self.schedule_thread and self.schedule_thread.is_alive():
+            self.schedule_thread.join()  # Esperar a que el hilo termine
+        logging.debug('Hilo detenido...')
+        # schedule.clear()
         self.set_icon_color(icon, "red")
 
     def restart_execution(self, icon):
@@ -73,12 +85,12 @@ class TrayApp:
         try:
             logging.debug(schedule.get_jobs())
             if len(schedule.get_jobs()) >= 1:
-                self.stop_execution(self, icon)
+                self.stop_execution(icon)
             icon.stop()
         except Exception as e:
             logging.critical(e)
 
-    def configurar_schedule(self):
+    def configurar_schedule(self, icon):
         '''
         Configura las tareas programadas en base a las horas cargadas desde el archivo.
         '''
