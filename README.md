@@ -12,17 +12,19 @@ python install.py # Instala las dependencias en un entorno virtual venv
 .\venv\Scripts\activate # Activa el entorno virtual venv
 ```
 
-### Instalación y configuración de main.exe
+### Instalación y Configuración de main.exe
 
 ```bash
 # Ejecutar en la consola con permisos de admin
-pyinstaller.exe main.py --onefile
+pyinstaller.exe --onefile -n "Gestor Reloj de Asistencias" --windowed -i "energiademisiones.ico" --add-data "resources/*;resources" --debug all main.py
 # Instala el servicio y configura la inicialización del servicio cuando se enciende la PC
 python configure_startup.py
 # Ejecutar main.exe
 ```
 
 ### Instalación de service.py como servicio
+
+YA NO FUNCIONA ASÍ
 
 ```bash
 # Ejecutar en la consola con permisos de admin
@@ -35,21 +37,25 @@ python main.py
 ## Explicación de archivos
 
 ### Creados por el usuario
-* Con schedule.txt se configura el horario de ejecución del servicio
-* Con file_ips.txt se configura las ips de los dispositivos que el programa va a iterar para la ejecución de las tareas de "actualizar_hora_dispositivo" o "gestionar_marcaciones_dispositivos"
+
+-   Con schedule.txt se configura el horario de ejecución del servicio
+-   Con file_ips.txt se configura las ips de los dispositivos que el programa va a iterar para la ejecución de las tareas de "actualizar_hora_dispositivo" o "gestionar_marcaciones_dispositivos"
 
 ### Generados por el programa
-* En requirements.txt se encuentran las dependencias necesarias para la ejecución del proyecto
-* attendances_file.txt
-* ip_date_file.cro
-* ip_date_logs.cro
+
+-   En requirements.txt se encuentran las dependencias necesarias para la ejecución del proyecto
+-   attendances_file.txt
+-   ip_date_file.cro
+-   ip_date_logs.cro
 
 #### Logs
-* En program_debug.log se establecen mensajes de depuración, información, advertencias, errores comunes y críticos
-* En program_error.log se establecen mensajes de advertencias, errores comunes y críticos
-* En console_log.txt se guardan los mensajes de la consola que está ejecutando el programa
+
+-   En program_debug.log se establecen mensajes de depuración, información, advertencias, errores comunes y críticos
+-   En program_error.log se establecen mensajes de advertencias, errores comunes y críticos
+-   En console_log.txt se guardan los mensajes de la consola que está ejecutando el programa
 
 ## Explicación de carpetas
-* devices/ip/
-* venv/
-* resources/
+
+-   devices/ip/
+-   venv/
+-   resources/
