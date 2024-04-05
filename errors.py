@@ -3,7 +3,7 @@ import os
 import logging
 
 class ConexionFallida(Exception):
-    def __init__(self, ipDevice):
+    def __init__(self, nombreModelo, puntoMarcacion, ip):
         super().__init__()
         try:
             from file_manager import crear_carpeta_y_devolver_ruta
@@ -16,7 +16,7 @@ class ConexionFallida(Exception):
             logging.debug(fileName)
             filePath = os.path.join(folderPath, fileName)
             hourString = datetime.now().strftime("%H:%M:%S")
-            self.mensaje = f'{hourString} Conexion fallida con {ipDevice}\n' 
+            self.mensaje = f'{hourString} Conexion fallida con {nombreModelo} - {puntoMarcacion}: {ip}\n' 
             with open(filePath, 'a') as file:
                 file.write(self.mensaje)
         except Exception as e:

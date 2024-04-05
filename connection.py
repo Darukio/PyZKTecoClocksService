@@ -1,21 +1,20 @@
 from zk import ZK
 from datetime import datetime
-from errors import ConexionFallida
 from utils import logging
 
 def conectar(ip, port):
+    conn = None
     try:
         zk = ZK(ip, port, timeout=5)
-        conn = None
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
+    except Exception as e:
+        logging.warning(e)
+        raise Exception(str(e))
+    finally:
         logging.info('Disabling device...')
         conn.disable_device()
         conn.test_voice(index=10)
-    except Exception as e:
-        logging.warning(e)
-        raise ConexionFallida(ip)
-    finally:
         return conn
 
 def finalizar_conexion(conn):
