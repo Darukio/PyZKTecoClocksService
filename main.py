@@ -4,7 +4,7 @@ import pyuac
 from icon_manager import TrayApp
 from utils import logging
 
-@pyuac.main_requires_admin
+#@pyuac.main_requires_admin
 def main():
     logging.debug('Script executing...')
 
@@ -15,8 +15,11 @@ def main():
     sys.stderr = open(logFilePath, 'a')
 
     if len(sys.argv) == 1:
-        app = TrayApp()
-        app.icon.run()
+        try:
+            app = TrayApp()
+            app.icon.run()
+        except Exception as e:
+            logging.error(e)
 
 if __name__ == '__main__':
     main()
