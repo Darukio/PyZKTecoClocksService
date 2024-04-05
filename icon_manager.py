@@ -96,7 +96,7 @@ class TrayApp:
         '''
 
         # Lee las horas de ejecución desde el archivo de texto
-        filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schedule.txt')
+        filePath = os.path.join(os.path.abspath('.'), 'schedule.txt')
         hoursToPerform = None
         try:
             hoursToPerform = cargar_desde_archivo(filePath)
