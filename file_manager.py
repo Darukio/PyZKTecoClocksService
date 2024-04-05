@@ -49,8 +49,4 @@ def guardar_marcaciones_en_archivo(attendances, file):
                 f.write(f"{attendance.user_id} {formatted_timestamp} {attendance.status} {attendance.punch}\n")
     except Exception as e:
         logging.error(f'Process terminate: {e}')
-
-def obtener_directorio_deseado(folder):
-    directorioActual = os.path.dirname(os.path.abspath(__file__))
-    folderPath = os.path.join(directorioActual, folder)
-    return folderPath
+        
