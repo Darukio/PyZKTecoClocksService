@@ -23,7 +23,7 @@ def cargar_desde_archivo(filePath):
 
 def crear_carpeta_y_devolver_ruta(*args):
     # Directorio base donde se almacenarán las carpetas con la IP
-    directorioActual = os.path.dirname(os.path.abspath(__file__))
+    directorioActual = os.path.abspath('.')
     rutaDestino = directorioActual
     
     for index, carpeta in enumerate(args, start=1):
@@ -49,8 +49,3 @@ def guardar_marcaciones_en_archivo(attendances, file):
                 f.write(f"{attendance.user_id} {formatted_timestamp} {attendance.status} {attendance.punch}\n")
     except Exception as e:
         logging.error(f'Process terminate: {e}')
-
-def obtener_directorio_deseado(folder):
-    directorioActual = os.path.dirname(os.path.abspath(__file__))
-    folderPath = os.path.join(directorioActual, folder)
-    return folderPath
