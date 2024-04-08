@@ -55,7 +55,7 @@ class TrayApp:
         '''
             Crear ícono en la bandeja del sistema
         '''
-        filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"circle-{self.colorIcon}.png")
+        filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.colorIcon}.png")
         image = Image.open(filePath)
         
         try:
@@ -75,7 +75,7 @@ class TrayApp:
     def set_icon_color(self, icon, color):
         # Función para cambiar el color del ícono
         self.colorIcon = color
-        filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", f"circle-{self.colorIcon}.png")
+        filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.colorIcon}.png")
         image = Image.open(filePath)
         icon.update_menu()
         icon.icon = image
@@ -107,9 +107,9 @@ class TrayApp:
             # Itera las horas de ejecución
             for hourToPerform in hoursToPerform:
                 '''
-                Ejecuta la tarea de actualizar hora y guardar las 
+                Ejecuta la tarea de actualizar hora y guarda las 
                 marcaciones en archivos (individual y en conjunto)
-                en la hora especificada en .at
+                en la hora especificada en schedule.txt
                 '''
 
                 schedule.every().day.at(hourToPerform).do(gestionar_marcaciones_dispositivos)
