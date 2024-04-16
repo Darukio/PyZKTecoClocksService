@@ -1,7 +1,7 @@
 from connection import *
 from file_manager import *
 from datetime import datetime
-from errors import ConexionFallida
+from errors import ConexionFallida, HoraDesactualizada
 from utils import logging
 import os
 
@@ -115,7 +115,12 @@ def actualizar_hora_dispositivos():
 
                     if conn:
                         logging.info(f'Processing IP: {infoDevice["ip"]}')
-                        actualizar_hora(conn)
+                        try:
+                            actualizar_hora(conn)
+                        except Exception as e:
+                            raise HoraDesactualizada(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
                         finalizar_conexion(conn)
             except ConexionFallida as e:
+                pass
+            except HoraDesactualizada as e:
                 pass
