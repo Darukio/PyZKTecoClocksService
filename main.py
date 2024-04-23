@@ -1,12 +1,14 @@
 
 import sys
-import pyuac
 from icon_manager import TrayApp
 from utils import logging
 
-#@pyuac.main_requires_admin
+# Versión del programa
+VERSION = "v1.0.0-beta"
+
 def main():
     logging.debug('Script executing...')
+    logging.info(f"Version del programa: {VERSION}")
 
     logFilePath = 'console_log.txt'
 
