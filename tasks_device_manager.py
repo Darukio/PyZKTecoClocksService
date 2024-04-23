@@ -3,6 +3,7 @@ from file_manager import *
 from datetime import datetime
 from errors import ConexionFallida, HoraDesactualizada
 from utils import logging
+import threading
 import os
 
 def organizar_info_dispositivos(line):
@@ -53,25 +54,59 @@ def gestionar_marcaciones_dispositivos():
     if infoDevices:
         # Itera a través de los dispositivos
         for infoDevice in infoDevices:
-            try:
-                # Si el dispositivo se encuentra activo...
-                if eval(infoDevice["activo"]) == True:
-                    conn = None
-                    try:
-                        conn = conectar(infoDevice["ip"], port=4370)
-                    except Exception as e:
-                        raise ConexionFallida(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
+            # Si el dispositivo se encuentra activo...
+            if eval(infoDevice["activo"]) == True:
+                conn = None
                     
-                    if conn:
-                        logging.info(f'Processing IP: {infoDevice["ip"]}')
-                        actualizar_hora(conn)
-                        attendances = obtener_marcaciones(conn)
-                        logging.info(f'Attendances: {attendances}')
-                        gestionar_marcaciones_individual(infoDevice, attendances)
-                        gestionar_marcaciones_global(attendances)
-                        finalizar_conexion(conn)
-            except ConexionFallida as e:
-                pass
+                try:
+                    conn = conectar(infoDevice["ip"], port=4370)
+                except Exception as e:
+                    thread = threading.Thread(target=reintentar_conexion_marcaciones, args=(infoDevice,))
+                    thread.start()
+
+                gestionar_marcaciones_conexion(infoDevice, conn)
+
+def gestionar_marcaciones_conexion(infoDevice, conn):
+    if conn:
+        logging.debug(conn)
+        logging.info(f'Processing IP: {infoDevice["ip"]}')
+        try:
+            try:
+                actualizar_hora(conn)
+            except Exception as e:
+                raise HoraDesactualizada(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
+        except HoraDesactualizada as e:
+            pass
+        attendances = obtener_marcaciones(conn)
+        logging.info(f'Attendances: {attendances}')
+        gestionar_marcaciones_individual(infoDevice, attendances)
+        gestionar_marcaciones_global(attendances)
+        finalizar_conexion(conn)
+    return
+
+def reintentar_conexion_marcaciones(infoDevice):
+    conn = reintentar_conexion(infoDevice)
+    if conn:
+        gestionar_marcaciones_conexion(infoDevice, conn)
+    return
+
+def reintentar_conexion(infoDevice):
+    conn = None
+    logging.info(f'Retrying connection to device {infoDevice["ip"]}...')
+    intentos_maximos = 3
+    intentos = 0
+    while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
+        try:
+            conn = conectar(infoDevice['ip'], port=4370)
+            return conn
+        except Exception as e:
+            logging.warning(f'Failed to connect to device {infoDevice['ip']}. Retrying...')
+            intentos += 1
+    logging.error(f'Unable to connect to device {infoDevice['ip']} after {intentos} attempts.')
+    try:    
+        raise ConexionFallida(infoDevice['nombreModelo'], infoDevice['puntoMarcacion'], infoDevice['ip'])
+    except ConexionFallida:
+        pass
 
 def gestionar_marcaciones_individual(infoDevice, attendances):
     folderPath = crear_carpeta_y_devolver_ruta('devices', infoDevice["nombreDistrito"], infoDevice["nombreModelo"] + "-" + infoDevice["puntoMarcacion"])
@@ -104,23 +139,73 @@ def actualizar_hora_dispositivos():
     if infoDevices:
         # Itera a través de los dispositivos
         for infoDevice in infoDevices:
-            try:
-                # Si el dispositivo se encuentra activo...
-                if eval(infoDevice["activo"]) == True:
-                    conn = None
-                    try:
-                        conn = conectar(infoDevice["ip"], port=4370)
-                    except Exception as e:
-                        raise ConexionFallida(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
+            # Si el dispositivo se encuentra activo...
+            if eval(infoDevice["activo"]) == True:
+                conn = None
+                        
+                try:
+                    conn = conectar(infoDevice["ip"], port=4370)
+                except Exception as e:
+                    thread = threading.Thread(target=reintentar_conexion_hora, args=(infoDevice,))
+                    thread.start()
 
-                    if conn:
-                        logging.info(f'Processing IP: {infoDevice["ip"]}')
-                        try:
-                            actualizar_hora(conn)
-                        except Exception as e:
-                            raise HoraDesactualizada(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
-                        finalizar_conexion(conn)
-            except ConexionFallida as e:
-                pass
-            except HoraDesactualizada as e:
-                pass
+                actualizar_hora_conexion(infoDevice, conn)
+
+def reintentar_conexion_hora(infoDevice):
+    conn = reintentar_conexion(infoDevice)
+    if conn:
+        actualizar_hora_conexion(infoDevice, conn)
+    return
+
+def actualizar_hora_conexion(infoDevice, conn):
+    if conn:
+        logging.info(f'Processing IP: {infoDevice["ip"]}')
+        try:
+            try:
+                actualizar_hora(conn)
+            except Exception as e:
+                raise HoraDesactualizada(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
+        except HoraDesactualizada as e:
+            pass
+        finalizar_conexion(conn)
+    return
+
+def obtener_cantidad_registros():
+    # Obtiene la ubicación del archivo de texto
+    filePath = os.path.join(os.path.abspath('.'), 'info_devices.txt')
+    logging.debug(filePath)
+    infoDevices = None
+    try:
+        # Obtiene todos los dispositivos en una lista formateada
+        infoDevices = obtener_info_dispositivos(filePath)
+    except Exception as e:
+        logging.error(e)
+
+    cantidad_registros = {}
+    intentos_maximos = 3
+
+    if infoDevices:
+        # Itera a través de los dispositivos
+        for infoDevice in infoDevices:
+            # Si el dispositivo se encuentra activo...
+            if eval(infoDevice["activo"]) == True:
+                conn = None
+
+                intentos = 0
+
+                while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
+                    try:
+                        conn = conectar(infoDevice['ip'], port=4370)
+                        if conn:
+                            break
+                    except Exception as e:
+                        logging.warning(f'Failed to connect to device {infoDevice['ip']}. Retrying...')
+                        intentos += 1
+                    
+                if conn:
+                    conn.get_attendance()
+                    cantidad_registros[infoDevice["ip"]] = conn.records
+                else:
+                    cantidad_registros[infoDevice["ip"]] = 'Falló'
+                
+    return cantidad_registros
