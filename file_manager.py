@@ -23,11 +23,11 @@ def cargar_desde_archivo(filePath):
 
 def crear_carpeta_y_devolver_ruta(*args):
     # Directorio base donde se almacenarán las carpetas con la IP
-    directorioActual = os.path.dirname(os.path.abspath(__file__))
+    directorioActual = os.path.abspath('.')
     rutaDestino = directorioActual
     
     for index, carpeta in enumerate(args, start=1):
-        rutaDestino = os.path.join(rutaDestino, carpeta)
+        rutaDestino = os.path.join(rutaDestino, carpeta.lower())
         if not os.path.exists(rutaDestino):
             os.makedirs(rutaDestino)
             logging.debug(f'Se ha creado la carpeta {carpeta} en la ruta {rutaDestino}')
