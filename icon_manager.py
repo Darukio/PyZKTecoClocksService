@@ -1,10 +1,12 @@
 import os
 import time
 import schedule
+import tkinter as tk
+from tkinter import messagebox
 from pystray import MenuItem as item
 from pystray import Icon, Menu
 from PIL import Image
-from tasks_device_manager import actualizar_hora_dispositivos, gestionar_marcaciones_dispositivos
+from tasks_device_manager import actualizar_hora_dispositivos, gestionar_marcaciones_dispositivos, obtener_cantidad_registros
 from file_manager import cargar_desde_archivo
 from utils import logging
 import threading
@@ -65,12 +67,29 @@ class TrayApp:
                 item('Reiniciar', self.restart_execution),
                 item('Actualizar hora', actualizar_hora_dispositivos),
                 item('Obtener marcaciones', gestionar_marcaciones_dispositivos),
+                item('Obtener cantidad de registros', self.mostrar_cantidad_registros),
                 item('Salir', self.exit_icon)
             ))
         except Exception as e:
             logging.error(e)
 
         return icon
+    
+    def mostrar_cantidad_registros(self, icon, item):
+        # Crear una ventana emergente de tkinter
+        root = tk.Tk()
+        root.withdraw()  # Ocultar la ventana principal
+        cantidad_registros = obtener_cantidad_registros()
+        cantidad_registros_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_registros.items()])
+
+        # Mostrar un cuadro de diálogo con la información
+        messagebox.showinfo("Registros por dispositivo", cantidad_registros_str)
+
+        # Cerrar la ventana emergente de tkinter
+        #self.root.quit()
+
+        # Cerrar la ventana emergente de tkinter
+        #root.after(0, root.destroy)  # Programar la destrucción de la ventana para después de que termine mainloop
 
     def set_icon_color(self, icon, color):
         # Función para cambiar el color del ícono
