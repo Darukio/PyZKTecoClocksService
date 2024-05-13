@@ -10,18 +10,19 @@ def organizar_info_dispositivos(line):
     # Dividir la línea en partes utilizando el separador " - "
     parts = line.strip().split(" - ")
     logging.debug(parts)
-    # Verificar que hay exactamente 5 partes en la línea
-    if len(parts) == 5:
+    # Verificar que hay exactamente 6 partes en la línea
+    if len(parts) == 6:
         # Retorna un objeto con atributos
         return {
             "nombreDistrito": parts[0],
             "nombreModelo": parts[1],
             "puntoMarcacion": parts[2],
             "ip": parts[3],
-            "activo": parts[4]
+            "id": parts[4],
+            "activo": parts[5]
         }
     else:
-        # Si no hay exactamente 5 partes, retornar None
+        # Si no hay exactamente 6 partes, retornar None
         return None
 
 def obtener_info_dispositivos(filePath):
@@ -69,6 +70,8 @@ def gestionar_marcaciones_dispositivos():
 def gestionar_marcaciones_conexion(infoDevice, conn):
     if conn:
         logging.debug(conn)
+        logging.debug(conn.get_platform())
+        logging.debug(conn.get_device_name())
         logging.info(f'Processing IP: {infoDevice["ip"]}')
         try:
             try:
@@ -78,16 +81,29 @@ def gestionar_marcaciones_conexion(infoDevice, conn):
         except HoraDesactualizada as e:
             pass
         attendances = obtener_marcaciones(conn)
-        logging.info(f'Attendances: {attendances}')
+        attendances = format_attendances(attendances, infoDevice["id"])
+        logging.info(f'{infoDevice["ip"]} - Attendances: {attendances}')
         gestionar_marcaciones_individual(infoDevice, attendances)
         gestionar_marcaciones_global(attendances)
         finalizar_conexion(conn)
     return
 
+def format_attendances(attendances, id):
+    formatted_attendances = []
+    for attendance in attendances:
+        formatted_timestamp = attendance.timestamp.strftime("%d/%m/%Y %H:%M") # Formatea el timestamp a DD/MM/YYYY hh:mm, ejemplo: 21/07/2023 05:28
+        attendance_formatted = {
+            "user_id": attendance.user_id,
+            "timestamp": formatted_timestamp,
+            "id": id,
+            "status": attendance.status
+        }
+        formatted_attendances.append(attendance_formatted)
+    return formatted_attendances
+
 def reintentar_conexion_marcaciones(infoDevice):
     conn = reintentar_conexion(infoDevice)
-    if conn:
-        gestionar_marcaciones_conexion(infoDevice, conn)
+    gestionar_marcaciones_conexion(infoDevice, conn)
     return
 
 def reintentar_conexion(infoDevice):
@@ -153,8 +169,7 @@ def actualizar_hora_dispositivos():
 
 def reintentar_conexion_hora(infoDevice):
     conn = reintentar_conexion(infoDevice)
-    if conn:
-        actualizar_hora_conexion(infoDevice, conn)
+    actualizar_hora_conexion(infoDevice, conn)
     return
 
 def actualizar_hora_conexion(infoDevice, conn):
@@ -170,7 +185,7 @@ def actualizar_hora_conexion(infoDevice, conn):
         finalizar_conexion(conn)
     return
 
-def obtener_cantidad_registros():
+def obtener_cantidad_marcaciones():
     # Obtiene la ubicación del archivo de texto
     filePath = os.path.join(os.path.abspath('.'), 'info_devices.txt')
     logging.debug(filePath)
@@ -181,7 +196,7 @@ def obtener_cantidad_registros():
     except Exception as e:
         logging.error(e)
 
-    cantidad_registros = {}
+    cantidad_marcaciones = {}
     intentos_maximos = 3
 
     if infoDevices:
@@ -204,8 +219,8 @@ def obtener_cantidad_registros():
                     
                 if conn:
                     conn.get_attendance()
-                    cantidad_registros[infoDevice["ip"]] = conn.records
+                    cantidad_marcaciones[infoDevice["ip"]] = conn.records
                 else:
-                    cantidad_registros[infoDevice["ip"]] = 'Falló'
+                    cantidad_marcaciones[infoDevice["ip"]] = 'Falló'
                 
-    return cantidad_registros
+    return cantidad_marcaciones

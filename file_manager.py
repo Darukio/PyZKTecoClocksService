@@ -45,8 +45,7 @@ def guardar_marcaciones_en_archivo(attendances, file):
                 for attr_name, attr_value in vars(attendance).items():
                     print(f"{attr_name}: {type(attr_value)}")
                 '''
-                formatted_timestamp = attendance.timestamp.strftime("%d/%m/%Y %H:%M") # Formatea el timestamp a DD/MM/YYYY hh:mm, ejemplo: 21/07/2023 05:28
-                f.write(f"{attendance.user_id} {formatted_timestamp} {attendance.status} {attendance.punch}\n")
+                f.write(f"{attendance['user_id']} {attendance['timestamp']} {attendance['id']} {attendance['status']}\n")
     except Exception as e:
         logging.error(f'Process terminate: {e}')
         
