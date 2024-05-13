@@ -1,21 +1,27 @@
 import os
 import time
 import schedule
+import configparser
 import tkinter as tk
 from tkinter import messagebox
 from pystray import MenuItem as item
 from pystray import Icon, Menu
 from PIL import Image
-from tasks_device_manager import actualizar_hora_dispositivos, gestionar_marcaciones_dispositivos, obtener_cantidad_registros
+from tasks_device_manager import actualizar_hora_dispositivos, gestionar_marcaciones_dispositivos, obtener_cantidad_marcaciones
 from file_manager import cargar_desde_archivo
 from utils import logging
 import threading
+
+# Para leer un archivo INI
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 class TrayApp:
     def __init__(self):
         self.is_running = False
         self.schedule_thread = None
         self.colorIcon = "red"
+        self.checked = eval(config['Device_config']['clear_attendance'])
         self.icon = self.create_tray_icon()
         self.configurar_schedule(self.icon)
 
@@ -67,23 +73,35 @@ class TrayApp:
                 item('Reiniciar', self.restart_execution),
                 item('Actualizar hora', actualizar_hora_dispositivos),
                 item('Obtener marcaciones', gestionar_marcaciones_dispositivos),
-                item('Obtener cantidad de registros', self.mostrar_cantidad_registros),
+                item('Obtener cantidad de marcaciones', self.mostrar_cantidad_marcaciones),
+                item('Eliminar marcaciones', self.toggle_checkbox_clear_attendance, checked=lambda item: self.checked, radio=True),
                 item('Salir', self.exit_icon)
-            ))
+                )
+            )
         except Exception as e:
             logging.error(e)
 
         return icon
+
+    # Definir una función para cambiar el estado de la checkbox
+    def toggle_checkbox_clear_attendance(self, icon, item):
+        self.checked = not item.checked
+        logging.debug(f"Status checkbox: {self.checked}")
+        # Modificar el valor del campo deseado
+        config['Device_config']['clear_attendance'] = str(self.checked)
+        # Escribir los cambios de vuelta al archivo de configuración
+        with open('config.ini', 'w') as config_file:
+            config.write(config_file)
     
-    def mostrar_cantidad_registros(self, icon, item):
+    def mostrar_cantidad_marcaciones(self, icon, item):
         # Crear una ventana emergente de tkinter
         root = tk.Tk()
         root.withdraw()  # Ocultar la ventana principal
-        cantidad_registros = obtener_cantidad_registros()
-        cantidad_registros_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_registros.items()])
+        cantidad_marcaciones = obtener_cantidad_marcaciones()
+        cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])
 
         # Mostrar un cuadro de diálogo con la información
-        messagebox.showinfo("Registros por dispositivo", cantidad_registros_str)
+        messagebox.showinfo("Marcaciones por dispositivo", cantidad_marcaciones_str)
 
         # Cerrar la ventana emergente de tkinter
         #self.root.quit()
