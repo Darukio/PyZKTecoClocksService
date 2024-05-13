@@ -1,6 +1,11 @@
 from zk import ZK
 from datetime import datetime
 from utils import logging
+import configparser
+
+# Para leer un archivo INI
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 def conectar(ip, port):
     conn = None
@@ -9,7 +14,6 @@ def conectar(ip, port):
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
     except Exception as e:
-        # Si falla la conexión, iniciar un hilo aparte para intentar nuevamente
         raise Exception(str(e))
     if conn is not None:
         #logging.info('Disabling device...')
@@ -21,23 +25,24 @@ def conectar(ip, port):
 def finalizar_conexion(conn):
     #logging.info('Enabling device...')
     #conn.enable_device()
-    logging.info('Disconnecting device...')
+    logging.info(f'{conn.get_network_params()['ip']} - Disconnecting device...')
     conn.disconnect()
     
 def actualizar_hora(conn):
     # get current machine's time
     try:
-        validar_hora(conn.get_time())
+        zktime = conn.get_time()
+        logging.debug(f'{conn.get_network_params()['ip']} - Date and hour device: {zktime} - Date and hour machine: {newtime}')
+        validar_hora(zktime)
     except Exception as e:
         raise Exception(str(e))
-    # update new time to machine
-    newtime = datetime.today()
-    conn.set_time(newtime)
+    finally:
+        # update new time to machine
+        newtime = datetime.today()
+        conn.set_time(newtime)
 
 def validar_hora(zktime):
     newtime = datetime.today()
-    logging.info(f'Date and hour device: {zktime} - Date and hour machine: {newtime}')
-    logging.debug(f'Device: {zktime.day}/{zktime.month}/{zktime.year} - Machine: {newtime.day}/{newtime.month}/{newtime.year}')
     if (abs(zktime.hour - newtime.hour) > 0 or
     abs(zktime.minute - newtime.minute) >= 5 or
     zktime.day != newtime.day or
@@ -48,17 +53,20 @@ def validar_hora(zktime):
 def obtener_marcaciones(conn, intentos=0):
     attendances = []
     try:
-        logging.info('Getting attendances...')
+        logging.info(f'{conn.get_network_params()['ip']} - Getting attendances...')
         attendances = conn.get_attendance()
-        logging.info('Disabling device OFF')
-        #conn.clear_attendance()
-        logging.debug(f'Length of attendances from device: {conn.records}, Length of attendances: {len(attendances)}')
         if conn.records != len(attendances):
             if intentos < 3:
-                logging.warning(f"Records mismatch. Retrying... Attempt {intentos+1}")
+                logging.warning(f"{conn.get_network_params()['ip']} - Records mismatch. Retrying... Attempt {intentos+1}")
                 return obtener_marcaciones(conn, intentos + 1)
             else:
-                logging.error("Failed to retrieve attendances after 3 attempts.")
+                logging.error(f"{conn.get_network_params()['ip']} - Failed to retrieve attendances after 3 attempts.")
+        else:
+            logging.debug(f'clear_attendance: {config['Device_config']['clear_attendance']}')
+            if eval(config['Device_config']['clear_attendance']):
+                logging.debug(f'{conn.get_network_params()['ip']} - Clearing attendances...')
+                conn.clear_attendance()
+            logging.debug(f'{conn.get_network_params()['ip']} - Length of attendances from device: {conn.records}, Length of attendances: {len(attendances)}')
     except Exception as e:
         logging.error(f'Process terminated: {e}')
     return attendances
