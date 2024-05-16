@@ -5,7 +5,6 @@ import configparser
 
 # Para leer un archivo INI
 config = configparser.ConfigParser()
-config.read('config.ini')
 
 def conectar(ip, port):
     conn = None
@@ -62,6 +61,7 @@ def obtener_marcaciones(conn, intentos=0):
             else:
                 logging.error(f"{conn.get_network_params()['ip']} - Failed to retrieve attendances after 3 attempts.")
         else:
+            config.read('config.ini')
             logging.debug(f'clear_attendance: {config['Device_config']['clear_attendance']}')
             if eval(config['Device_config']['clear_attendance']):
                 logging.debug(f'{conn.get_network_params()['ip']} - Clearing attendances...')
