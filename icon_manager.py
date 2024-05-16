@@ -7,7 +7,8 @@ from tkinter import messagebox
 from pystray import MenuItem as item
 from pystray import Icon, Menu
 from PIL import Image
-from tasks_device_manager import actualizar_hora_dispositivos, gestionar_marcaciones_dispositivos, obtener_cantidad_marcaciones
+from attendances_manager import *
+from hour_manager import *
 from file_manager import cargar_desde_archivo
 from utils import logging
 import threading
@@ -71,8 +72,8 @@ class TrayApp:
                 item('Iniciar', self.start_execution),
                 item('Detener', self.stop_execution),
                 item('Reiniciar', self.restart_execution),
-                item('Actualizar hora', actualizar_hora_dispositivos),
-                item('Obtener marcaciones', gestionar_marcaciones_dispositivos),
+                item('Actualizar hora', self.opc_actualizar_hora_dispositivos),
+                item('Obtener marcaciones', self.opc_marcaciones_dispositivos),
                 item('Obtener cantidad de marcaciones', self.mostrar_cantidad_marcaciones),
                 item('Eliminar marcaciones', self.toggle_checkbox_clear_attendance, checked=lambda item: self.checked, radio=True),
                 item('Salir', self.exit_icon)
@@ -82,6 +83,27 @@ class TrayApp:
             logging.error(e)
 
         return icon
+    
+    def opc_actualizar_hora_dispositivos(self, icon):
+        tiempo_inicial = self.iniciar_cronometro()
+        actualizar_hora_dispositivos()
+        self.finalizar_cronometro(icon, tiempo_inicial)
+        return
+    
+    def iniciar_cronometro(self):
+        return time.time()
+    
+    def finalizar_cronometro(self, icon, tiempo_inicial):
+        tiempo_final = self.iniciar_cronometro()
+        tiempo_transcurrido = tiempo_final - tiempo_inicial
+        icon.notify(f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos')
+        return
+
+    def opc_marcaciones_dispositivos(self, icon):
+        tiempo_inicial = self.iniciar_cronometro()
+        gestionar_marcaciones_dispositivos()
+        self.finalizar_cronometro(icon, tiempo_inicial)
+        return
 
     # Definir una función para cambiar el estado de la checkbox
     def toggle_checkbox_clear_attendance(self, icon, item):
