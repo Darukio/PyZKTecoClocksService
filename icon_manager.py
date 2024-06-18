@@ -21,7 +21,6 @@ import os
 import time
 import schedule
 import configparser
-import tkinter as tk
 from tkinter import messagebox
 from pystray import MenuItem as item
 from pystray import Icon, Menu
@@ -37,7 +36,8 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 class TrayApp:
-    def __init__(self):
+    def __init__(self, pRoot):
+        self.root = pRoot
         self.is_running = False
         self.schedule_thread = None
         self.colorIcon = "red"
@@ -91,6 +91,7 @@ class TrayApp:
                 item('Iniciar', self.start_execution),
                 item('Detener', self.stop_execution),
                 item('Reiniciar', self.restart_execution),
+                item('Probar conexiones', self.opc_probar_conexiones),
                 item('Actualizar hora', self.opc_actualizar_hora_dispositivos),
                 item('Obtener marcaciones', self.opc_marcaciones_dispositivos),
                 item('Obtener cantidad de marcaciones', self.mostrar_cantidad_marcaciones),
@@ -102,11 +103,22 @@ class TrayApp:
             logging.error(e)
 
         return icon
+
+    def opc_probar_conexiones(self, icon):
+        from device_manager import ping_devices
+        self.set_icon_color(icon, "yellow")
+        tiempo_inicial = self.iniciar_cronometro()
+        ping_devices()
+        self.finalizar_cronometro(icon, tiempo_inicial)
+        self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
+        return
     
     def opc_actualizar_hora_dispositivos(self, icon):
+        self.set_icon_color(icon, "yellow")
         tiempo_inicial = self.iniciar_cronometro()
         actualizar_hora_dispositivos()
         self.finalizar_cronometro(icon, tiempo_inicial)
+        self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
         return
     
     def iniciar_cronometro(self):
@@ -119,9 +131,11 @@ class TrayApp:
         return
 
     def opc_marcaciones_dispositivos(self, icon):
+        self.set_icon_color(icon, "yellow")
         tiempo_inicial = self.iniciar_cronometro()
         gestionar_marcaciones_dispositivos()
         self.finalizar_cronometro(icon, tiempo_inicial)
+        self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
         return
 
     # Definir una función para cambiar el estado de la checkbox
@@ -136,19 +150,19 @@ class TrayApp:
     
     def mostrar_cantidad_marcaciones(self, icon, item):
         # Crear una ventana emergente de tkinter
-        root = tk.Tk()
-        root.withdraw()  # Ocultar la ventana principal
-        cantidad_marcaciones = obtener_cantidad_marcaciones()
-        cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])
-
-        # Mostrar un cuadro de diálogo con la información
-        messagebox.showinfo("Marcaciones por dispositivo", cantidad_marcaciones_str)
-
-        # Cerrar la ventana emergente de tkinter
-        #self.root.quit()
-
-        # Cerrar la ventana emergente de tkinter
-        #root.after(0, root.destroy)  # Programar la destrucción de la ventana para después de que termine mainloop
+        self.set_icon_color(icon, "yellow")
+        try:
+            tiempo_inicial = self.iniciar_cronometro()
+            cantidad_marcaciones = obtener_cantidad_marcaciones()
+            self.finalizar_cronometro(icon, tiempo_inicial)
+            cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])
+            # Mostrar un cuadro de diálogo con la información
+            messagebox.showinfo("Marcaciones por dispositivo", cantidad_marcaciones_str)
+        except Exception as e:
+            logging.error(f"Error al mostrar cantidad de marcaciones: {e}")
+        finally:
+            self.root.destroy()
+            self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
 
     def set_icon_color(self, icon, color):
         # Función para cambiar el color del ícono
