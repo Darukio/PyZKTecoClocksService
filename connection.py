@@ -28,7 +28,7 @@ config = configparser.ConfigParser()
 def conectar(ip, port):
     conn = None
     try:
-        zk = ZK(ip, port, timeout=5)
+        zk = ZK(ip, port, timeout=60)
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
     except Exception as e:
@@ -43,8 +43,11 @@ def conectar(ip, port):
 def finalizar_conexion(conn):
     #logging.info('Enabling device...')
     #conn.enable_device()
-    logging.info(f'{conn.get_network_params()['ip']} - Disconnecting device...')
-    conn.disconnect()
+    try:
+        logging.info(f'{conn.get_network_params()['ip']} - Disconnecting device...')
+        conn.disconnect()
+    except Exception as e:
+        raise Exception(str(e))
     
 def actualizar_hora(conn):
     # get current machine's time
