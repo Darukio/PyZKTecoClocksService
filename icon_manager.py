@@ -21,10 +21,9 @@ import os
 import time
 import schedule
 import configparser
-from tkinter import messagebox
-from pystray import MenuItem as item
-from pystray import Icon, Menu
-from PIL import Image
+from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QMessageBox
+from PyQt5.QtGui import QIcon
+from windows_manager import DeviceStatusWindow
 from attendances_manager import *
 from hour_manager import *
 from file_manager import cargar_desde_archivo
@@ -36,8 +35,8 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 class TrayApp:
-    def __init__(self, pRoot):
-        self.root = pRoot
+    def __init__(self):
+        self.app = QApplication([])
         self.is_running = False
         self.schedule_thread = None
         self.colorIcon = "red"
@@ -84,31 +83,52 @@ class TrayApp:
             Crear ícono en la bandeja del sistema
         '''
         filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.colorIcon}.png")
-        image = Image.open(filePath)
         
         try:
-            icon = Icon("GestorRelojAsistencias", image, "Gestor Reloj de Asistencias", menu=Menu(
-                item('Iniciar', self.start_execution),
-                item('Detener', self.stop_execution),
-                item('Reiniciar', self.restart_execution),
-                item('Probar conexiones', self.opc_probar_conexiones),
-                item('Actualizar hora', self.opc_actualizar_hora_dispositivos),
-                item('Obtener marcaciones', self.opc_marcaciones_dispositivos),
-                item('Obtener cantidad de marcaciones', self.mostrar_cantidad_marcaciones),
-                item('Eliminar marcaciones', self.toggle_checkbox_clear_attendance, checked=lambda item: self.checked, radio=True),
-                item('Salir', self.exit_icon)
-                )
-            )
+            icon = QSystemTrayIcon(QIcon(filePath), self.app)
+            icon.setToolTip("GestorRelojAsistencias")
+            # Crear un menú contextual con un elemento de menú verificable (simulando un checkbox)
+            menu = QMenu()
+            menu.addAction(self.create_action("Iniciar", lambda: self.start_execution(icon)))
+            menu.addAction(self.create_action("Detener", lambda: self.stop_execution(icon)))
+            menu.addAction(self.create_action("Reiniciar", lambda: self.restart_execution(icon)))
+            menu.addAction(self.create_action("Probar conexiones", lambda: self.opc_probar_conexiones(icon)))
+            menu.addAction(self.create_action("Actualizar hora", lambda: self.opc_actualizar_hora_dispositivos(icon)))
+            menu.addAction(self.create_action("Obtener marcaciones", lambda: self.opc_marcaciones_dispositivos(icon)))
+            menu.addAction(self.create_action("Obtener cantidad de marcaciones", lambda: self.mostrar_cantidad_marcaciones(icon)))
+            
+            # Checkbox como QAction con estado verificable
+            clear_attendance_action = QAction("Eliminar marcaciones", menu)
+            clear_attendance_action.setCheckable(True)  # Hacer el QAction checkable
+            clear_attendance_action.setChecked(self.checked)
+            clear_attendance_action.triggered.connect(self.toggle_checkbox_clear_attendance)
+            menu.addAction(clear_attendance_action)
+
+            menu.addAction(self.create_action("Salir", lambda: self.exit_icon(icon)))
+            icon.setContextMenu(menu)
         except Exception as e:
             logging.error(e)
 
         return icon
 
+    def create_action(self, text, slot):
+        '''
+        Crea una acción con un texto y un slot.
+        '''
+        action = QAction(text, self.app)
+        action.triggered.connect(slot)
+        return action
+
+    def ventana_estados_dispositivos(device_status):
+        window = DeviceStatusWindow(device_status)
+        window.show()
+
     def opc_probar_conexiones(self, icon):
         from device_manager import ping_devices
         self.set_icon_color(icon, "yellow")
         tiempo_inicial = self.iniciar_cronometro()
-        ping_devices()
+        device_status = ping_devices()
+        threading.Thread(target=self.ventana_estados_dispositivos, args=(device_status,))
         self.finalizar_cronometro(icon, tiempo_inicial)
         self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
         return
@@ -127,7 +147,7 @@ class TrayApp:
     def finalizar_cronometro(self, icon, tiempo_inicial):
         tiempo_final = self.iniciar_cronometro()
         tiempo_transcurrido = tiempo_final - tiempo_inicial
-        icon.notify(f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos')
+        icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)
         return
 
     def opc_marcaciones_dispositivos(self, icon):
@@ -139,8 +159,8 @@ class TrayApp:
         return
 
     # Definir una función para cambiar el estado de la checkbox
-    def toggle_checkbox_clear_attendance(self, icon, item):
-        self.checked = not item.checked
+    def toggle_checkbox_clear_attendance(self, pChecked):
+        self.checked = pChecked
         logging.debug(f"Status checkbox: {self.checked}")
         # Modificar el valor del campo deseado
         config['Device_config']['clear_attendance'] = str(self.checked)
@@ -148,7 +168,7 @@ class TrayApp:
         with open('config.ini', 'w') as config_file:
             config.write(config_file)
     
-    def mostrar_cantidad_marcaciones(self, icon, item):
+    def mostrar_cantidad_marcaciones(self, icon):
         # Crear una ventana emergente de tkinter
         self.set_icon_color(icon, "yellow")
         try:
@@ -157,28 +177,26 @@ class TrayApp:
             self.finalizar_cronometro(icon, tiempo_inicial)
             cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])
             # Mostrar un cuadro de diálogo con la información
-            messagebox.showinfo("Marcaciones por dispositivo", cantidad_marcaciones_str)
+            QMessageBox.information(None, "Marcaciones por dispositivo", cantidad_marcaciones_str)
         except Exception as e:
             logging.error(f"Error al mostrar cantidad de marcaciones: {e}")
         finally:
-            self.root.destroy()
             self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
 
     def set_icon_color(self, icon, color):
         # Función para cambiar el color del ícono
         self.colorIcon = color
         filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.colorIcon}.png")
-        image = Image.open(filePath)
-        icon.update_menu()
-        icon.icon = image
+        icon.setIcon(QIcon(filePath))
 
-    def exit_icon(self, icon, item):
+    def exit_icon(self, icon):
         # Función para salir del programa
         try:
             logging.debug(schedule.get_jobs())
             if len(schedule.get_jobs()) >= 1:
                 self.stop_execution(icon)
-            icon.stop()
+            icon.hide()
+            self.app.quit()
         except Exception as e:
             logging.critical(e)
 

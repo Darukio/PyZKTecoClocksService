@@ -1,6 +1,6 @@
 pywin32
 schedule
 pyzk
-pystray
-pyuac
+PyQt5
+pillow
 pyinstaller

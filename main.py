@@ -21,7 +21,6 @@ import sys
 from icon_manager import TrayApp
 from utils import logging
 import configparser
-import tkinter as tk
 import threading
 
 # Versión del programa
@@ -45,12 +44,9 @@ def main():
 
     if len(sys.argv) == 1:
         try:
-            root = tk.Tk()
-            root.withdraw()
-            app = TrayApp(root)
-            thread = threading.Thread(target=root.mainloop()).start()
-            app.icon.run()
-            thread.join()
+            app = TrayApp()
+            app.icon.show()
+            sys.exit(app.app.exec_())
             
         except Exception as e:
             logging.error(e)

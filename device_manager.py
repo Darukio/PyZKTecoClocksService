@@ -90,6 +90,7 @@ def ping_devices():
 
     if infoDevices:
         threads = []
+        results = []
         # Itera a través de los dispositivos
         for infoDevice in infoDevices:
             # Si el dispositivo se encuentra activo...
@@ -98,9 +99,10 @@ def ping_devices():
                     
                 try:
                     conn = conectar(infoDevice["ip"], port=4370)
+                    results.append((infoDevice["ip"], "Éxito"))
                     finalizar_conexion(conn)
                 except Exception as e:
-                    thread = threading.Thread(target=reintentar_ping_device, args=(infoDevice,))
+                    thread = threading.Thread(target=reintentar_ping_device, args=(infoDevice, results))
                     thread.start()
                     threads.append(thread)
 
@@ -112,7 +114,9 @@ def ping_devices():
 def reintentar_ping_device(infoDevice):
     try:
         conn = reintentar_conexion(infoDevice)
+        results.append((infoDevice["ip"], "Éxito"))
         finalizar_conexion(conn)
     except Exception as e:
+        results.append((infoDevice["ip"], "Fallo"))
         pass
     return
