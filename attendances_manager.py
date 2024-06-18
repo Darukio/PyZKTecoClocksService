@@ -35,6 +35,7 @@ def gestionar_marcaciones_dispositivos():
         logging.error(e)
 
     if infoDevices:
+        threads = []
         # Itera a través de los dispositivos
         for infoDevice in infoDevices:
             # Si el dispositivo se encuentra activo...
@@ -46,8 +47,14 @@ def gestionar_marcaciones_dispositivos():
                 except Exception as e:
                     thread = threading.Thread(target=reintentar_conexion_marcaciones_dispositivo, args=(infoDevice,))
                     thread.start()
+                    threads.append(thread)
 
                 gestionar_marcaciones_dispositivo(infoDevice, conn)
+
+        # Espera a que todos los hilos hayan terminado
+        if threads:
+            for thread in threads:
+                thread.join()
 
 def gestionar_marcaciones_dispositivo(infoDevice, conn):
     if conn:
@@ -84,8 +91,11 @@ def format_attendances(attendances, id):
     return formatted_attendances
 
 def reintentar_conexion_marcaciones_dispositivo(infoDevice):
-    conn = reintentar_conexion(infoDevice)
-    gestionar_marcaciones_dispositivo(infoDevice, conn)
+    try:
+        conn = reintentar_conexion(infoDevice)
+        gestionar_marcaciones_dispositivo(infoDevice, conn)
+    except Exception as e:
+        pass
     return
 
 def gestionar_marcaciones_individual(infoDevice, attendances):

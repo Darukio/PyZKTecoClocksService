@@ -17,6 +17,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import threading
 from connection import *
 from file_manager import *
 from errors import ConexionFallida
@@ -77,3 +78,41 @@ def reintentar_conexion(infoDevice):
         raise ConexionFallida(infoDevice['nombreModelo'], infoDevice['puntoMarcacion'], infoDevice['ip'])
     except ConexionFallida:
         pass
+
+def ping_devices():
+    infoDevices = None
+    try:
+        # Obtiene todos los dispositivos en una lista formateada
+        infoDevices = obtener_info_dispositivos()
+        logging.debug(infoDevices)
+    except Exception as e:
+        logging.error(e)
+
+    if infoDevices:
+        threads = []
+        # Itera a través de los dispositivos
+        for infoDevice in infoDevices:
+            # Si el dispositivo se encuentra activo...
+            if eval(infoDevice["activo"]):
+                conn = None
+                    
+                try:
+                    conn = conectar(infoDevice["ip"], port=4370)
+                    finalizar_conexion(conn)
+                except Exception as e:
+                    thread = threading.Thread(target=reintentar_ping_device, args=(infoDevice,))
+                    thread.start()
+                    threads.append(thread)
+
+        # Espera a que todos los hilos hayan terminado
+        if threads:
+            for thread in threads:
+                thread.join()
+
+def reintentar_ping_device(infoDevice):
+    try:
+        conn = reintentar_conexion(infoDevice)
+        finalizar_conexion(conn)
+    except Exception as e:
+        pass
+    return
