@@ -37,7 +37,7 @@ def conectar(ip, port):
         #logging.info('Disabling device...')
         #conn.disable_device()
         logging.info(f'Successfully connected to device {ip}.')
-        conn.test_voice(index=10)
+        #conn.test_voice(index=10)
     return conn
     
 def finalizar_conexion(conn):

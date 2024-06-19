@@ -23,7 +23,6 @@ import schedule
 import configparser
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QMessageBox
 from PyQt5.QtGui import QIcon
-from windows_manager import DeviceStatusWindow
 from attendances_manager import *
 from hour_manager import *
 from file_manager import cargar_desde_archivo
@@ -43,6 +42,10 @@ class TrayApp:
         self.checked = eval(config['Device_config']['clear_attendance'])
         self.icon = self.create_tray_icon()
         self.configurar_schedule(self.icon)
+
+    def run(self):
+        self.icon.show()
+        self.app.exec_()
 
     def start_execution(self, icon):
         self.is_running = True
@@ -119,17 +122,15 @@ class TrayApp:
         action.triggered.connect(slot)
         return action
 
-    def ventana_estados_dispositivos(device_status):
-        window = DeviceStatusWindow(device_status)
-        window.show()
-
     def opc_probar_conexiones(self, icon):
         from device_manager import ping_devices
         self.set_icon_color(icon, "yellow")
         tiempo_inicial = self.iniciar_cronometro()
         device_status = ping_devices()
-        threading.Thread(target=self.ventana_estados_dispositivos, args=(device_status,))
         self.finalizar_cronometro(icon, tiempo_inicial)
+        device_status_str = "\n".join([f"{ip}: {status}" for ip, status in device_status.items()])
+        # Mostrar un cuadro de diálogo con la información
+        QMessageBox.information(None, "Conexiones de dispositivos", device_status_str)
         self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
         return
     

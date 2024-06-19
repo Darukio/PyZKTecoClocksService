@@ -17,9 +17,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import sys
 from icon_manager import TrayApp
 from utils import logging
+import sys
 import configparser
 import threading
 
@@ -45,8 +45,7 @@ def main():
     if len(sys.argv) == 1:
         try:
             app = TrayApp()
-            app.icon.show()
-            sys.exit(app.app.exec_())
+            app.run()
             
         except Exception as e:
             logging.error(e)

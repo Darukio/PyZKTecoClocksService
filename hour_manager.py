@@ -67,6 +67,9 @@ def actualizar_hora_dispositivo(infoDevice, conn):
     return
 
 def reintentar_conexion_hora(infoDevice):
+    # Redirigir stdout y stderr
+    sys.stdout = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, 'w')
     try:
         conn = reintentar_conexion(infoDevice)
         actualizar_hora_dispositivo(infoDevice, conn)

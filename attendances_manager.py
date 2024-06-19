@@ -91,6 +91,9 @@ def format_attendances(attendances, id):
     return formatted_attendances
 
 def reintentar_conexion_marcaciones_dispositivo(infoDevice):
+    # Redirigir stdout y stderr
+    sys.stdout = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, 'w')
     try:
         conn = reintentar_conexion(infoDevice)
         gestionar_marcaciones_dispositivo(infoDevice, conn)
@@ -148,6 +151,6 @@ def obtener_cantidad_marcaciones():
                     conn.get_attendance()
                     cantidad_marcaciones[infoDevice["ip"]] = conn.records
                 else:
-                    cantidad_marcaciones[infoDevice["ip"]] = 'Falló'
+                    cantidad_marcaciones[infoDevice["ip"]] = 'Conexión fallida'
                 
     return cantidad_marcaciones
