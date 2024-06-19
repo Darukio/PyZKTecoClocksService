@@ -24,6 +24,7 @@ from datetime import datetime
 from errors import HoraDesactualizada
 from utils import logging
 import threading
+import sys
 import os
 
 def gestionar_marcaciones_dispositivos():

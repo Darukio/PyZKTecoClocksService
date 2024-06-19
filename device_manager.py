@@ -19,6 +19,7 @@
 
 import threading
 import queue
+import sys
 from connection import *
 from file_manager import *
 from errors import ConexionFallida

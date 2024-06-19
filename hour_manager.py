@@ -22,6 +22,7 @@ from device_manager import *
 from errors import HoraDesactualizada
 from utils import logging
 import threading
+import sys
 
 def actualizar_hora_dispositivos():
     infoDevices = None
