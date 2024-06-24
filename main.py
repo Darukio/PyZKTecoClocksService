@@ -17,7 +17,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from icon_manager import TrayApp
+from PyQt5.QtWidgets import QApplication
+from icon_manager import MainWindow
 from utils import logging
 import sys
 import configparser
@@ -44,8 +45,9 @@ def main():
 
     if len(sys.argv) == 1:
         try:
-            app = TrayApp()
-            app.run()
+            app = QApplication(sys.argv)
+            main_window = MainWindow()
+            sys.exit(app.exec_())
             
         except Exception as e:
             logging.error(e)

@@ -24,7 +24,6 @@ from datetime import datetime
 from errors import HoraDesactualizada
 from utils import logging
 import threading
-import sys
 import os
 
 def gestionar_marcaciones_dispositivos():
@@ -92,9 +91,6 @@ def format_attendances(attendances, id):
     return formatted_attendances
 
 def reintentar_conexion_marcaciones_dispositivo(infoDevice):
-    # Redirigir stdout y stderr
-    sys.stdout = open(os.devnull, 'w')
-    sys.stderr = open(os.devnull, 'w')
     try:
         conn = reintentar_conexion(infoDevice)
         gestionar_marcaciones_dispositivo(infoDevice, conn)

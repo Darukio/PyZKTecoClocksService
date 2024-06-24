@@ -19,7 +19,6 @@
 
 import threading
 import queue
-import sys
 from connection import *
 from file_manager import *
 from errors import ConexionFallida
@@ -119,6 +118,7 @@ def ping_devices():
         # Procesar los resultados de la cola
         while not results_queue.empty():
             result = results_queue.get()
+            logging.debug(result)
             logging.debug(f'{result["ip"]} - {result["status"]}')
             ip = result["ip"]
             status = result["status"]
@@ -127,15 +127,12 @@ def ping_devices():
     return results
 
 def reintentar_ping_device(infoDevice, results_queue):
-    # Redirigir stdout y stderr
-    sys.stdout = open(os.devnull, 'w')
-    sys.stderr = open(os.devnull, 'w')
     try:
         conn = reintentar_conexion(infoDevice)
         results_queue.put({"ip": infoDevice["ip"], "status": "Conexión exitosa"})
-        logging.debug(f'{result["ip"]} - {result["status"]}')
+        logging.debug(f'{"ip": infoDevice["ip"], "status": "Conexión exitosa"}')
         finalizar_conexion(conn)
     except Exception as e:
         results_queue.put({"ip": infoDevice["ip"], "status": "Conexión fallida"})
-        logging.debug(f'{result["ip"]} - {result["status"]}')
+        logging.debug(f'{"ip": infoDevice["ip"], "status": "Conexión fallida"}')
     return

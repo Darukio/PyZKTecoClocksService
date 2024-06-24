@@ -1,226 +1,271 @@
-"""
-    PyZKTecoClocks: GUI for managing ZKTeco clocks, enabling clock 
-    time synchronization and attendance data retrieval.
-    Copyright (C) 2024  Paulo Sebastian Spaciuk (Darukio)
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
-
 import os
+import threading
 import time
-import schedule
 import configparser
-from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QMessageBox
+import schedule
+from PyQt5.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
 from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import pyqtSlot
 from attendances_manager import *
 from hour_manager import *
 from file_manager import cargar_desde_archivo
 from utils import logging
-import threading
 
 # Para leer un archivo INI
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('config.ini')  # Lectura del archivo de configuración config.ini
 
-class TrayApp:
+class MainWindow(QMainWindow):
     def __init__(self):
-        self.app = QApplication([])
-        self.is_running = False
-        self.schedule_thread = None
-        self.colorIcon = "red"
-        self.checked = eval(config['Device_config']['clear_attendance'])
-        self.icon = self.create_tray_icon()
-        self.configurar_schedule(self.icon)
+        super().__init__()
+        self.is_running = False  # Variable para indicar si la aplicación está corriendo
+        self.schedule_thread = None  # Hilo para ejecutar tareas programadas
+        self.checked = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
 
-    def run(self):
-        self.icon.show()
-        self.app.exec_()
+        self.tray_icon = None  # Variable para almacenar el QSystemTrayIcon
+        self.init_ui()  # Inicialización de la interfaz de usuario
+        configurar_schedule()  # Configuración de las tareas programadas
 
-    def start_execution(self, icon):
-        self.is_running = True
-        self.set_icon_color(icon, "green")
-        # Inicia un hilo para ejecutar run_pending() en segundo plano
-        try:
-            self.schedule_thread = threading.Thread(target=self.run_schedule)
-            logging.debug('Hilo iniciado...')
-            self.schedule_thread.start()
-        except Exception as e:
-            logging.critical(e)
+    def init_ui(self):
+        self.setWindowTitle('Ventana principal')  # Título de la ventana principal
+        self.setGeometry(100, 100, 400, 300)  # Geometría de la ventana principal (posición y tamaño)
 
-    def run_schedule(self):
-        # Función para ejecutar run_pending() en segundo plano
-        try:
-            while self.is_running:
-                logging.debug('Hilo en ejecucion...')
-                schedule.run_pending()
-                time.sleep(1)
-        except Exception as e:
-            logging.error(e)
-
-    def stop_execution(self, icon):
-        self.is_running = False
-        if self.schedule_thread and self.schedule_thread.is_alive():
-            self.schedule_thread.join()  # Esperar a que el hilo termine
-        logging.debug('Hilo detenido...')
-        # schedule.clear()
-        self.set_icon_color(icon, "red")
-
-    def restart_execution(self, icon):
-        # Función para reiniciar el servicio
-        self.stop_execution(icon)
-        self.start_execution(icon)
+        # Crear y configurar el ícono en la bandeja del sistema
+        self.color_icon = "red"  # Color inicial del ícono
+        self.create_tray_icon()  # Creación del ícono en la bandeja del sistema
 
     def create_tray_icon(self):
         '''
-            Crear ícono en la bandeja del sistema
+        Crear ícono en la bandeja del sistema con un menú contextual personalizado
         '''
-        filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.colorIcon}.png")
-        
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono
+
         try:
-            icon = QSystemTrayIcon(QIcon(filePath), self.app)
-            icon.setToolTip("GestorRelojAsistencias")
-            # Crear un menú contextual con un elemento de menú verificable (simulando un checkbox)
+            self.tray_icon = QSystemTrayIcon(QIcon(file_path), self)  # Creación del QSystemTrayIcon con el ícono y ventana principal asociada
+            self.tray_icon.setToolTip("GestorRelojAsistencias")  # Texto al colocar el cursor sobre el ícono
+
+            # Crear un menú contextual personalizado
             menu = QMenu()
-            menu.addAction(self.create_action("Iniciar", lambda: self.start_execution(icon)))
-            menu.addAction(self.create_action("Detener", lambda: self.stop_execution(icon)))
-            menu.addAction(self.create_action("Reiniciar", lambda: self.restart_execution(icon)))
-            menu.addAction(self.create_action("Probar conexiones", lambda: self.opc_probar_conexiones(icon)))
-            menu.addAction(self.create_action("Actualizar hora", lambda: self.opc_actualizar_hora_dispositivos(icon)))
-            menu.addAction(self.create_action("Obtener marcaciones", lambda: self.opc_marcaciones_dispositivos(icon)))
-            menu.addAction(self.create_action("Obtener cantidad de marcaciones", lambda: self.mostrar_cantidad_marcaciones(icon)))
-            
+            menu.addAction(self.create_action("Iniciar", lambda: self.opt_start_execution()))  # Acción para iniciar la ejecución
+            menu.addAction(self.create_action("Detener", lambda: self.opt_stop_execution()))  # Acción para detener la ejecución
+            menu.addAction(self.create_action("Reiniciar", lambda: self.opt_restart_execution()))  # Acción para reiniciar la ejecución
+            menu.addAction(self.create_action("Probar conexiones", lambda: self.opt_test_connections()))  # Acción para probar conexiones
+            menu.addAction(self.create_action("Actualizar hora", lambda: self.opt_update_device_time()))  # Acción para actualizar la hora del dispositivo
+            menu.addAction(self.create_action("Obtener marcaciones", lambda: self.opt_fetch_device_attendances()))  # Acción para obtener las marcaciones de dispositivos
+            menu.addAction(self.create_action("Obtener cantidad de marcaciones", lambda: self.opt_show_attendances_count()))  # Acción para mostrar la cantidad de marcaciones
+
             # Checkbox como QAction con estado verificable
             clear_attendance_action = QAction("Eliminar marcaciones", menu)
-            clear_attendance_action.setCheckable(True)  # Hacer el QAction checkable
-            clear_attendance_action.setChecked(self.checked)
-            clear_attendance_action.triggered.connect(self.toggle_checkbox_clear_attendance)
-            menu.addAction(clear_attendance_action)
+            clear_attendance_action.setCheckable(True)  # Hacer el QAction verificable
+            clear_attendance_action.setChecked(self.checked)  # Establecer estado inicial del checkbox
+            clear_attendance_action.triggered.connect(self.opt_toggle_checkbox_clear_attendance)  # Conectar acción de cambiar estado del checkbox
+            menu.addAction(clear_attendance_action)  # Agregar acción al menú
 
-            menu.addAction(self.create_action("Salir", lambda: self.exit_icon(icon)))
-            icon.setContextMenu(menu)
+            menu.addAction(self.create_action("Salir", lambda: self.opt_exit_icon()))  # Acción para salir de la aplicación
+            self.tray_icon.setContextMenu(menu)  # Asignar menú contextual al ícono
+
         except Exception as e:
-            logging.error(e)
+            print(f"Error al crear el ícono en la bandeja del sistema: {e}")
 
-        return icon
+        self.tray_icon.show()  # Mostrar el ícono en la bandeja del sistema
 
-    def create_action(self, text, slot):
-        '''
-        Crea una acción con un texto y un slot.
-        '''
-        action = QAction(text, self.app)
-        action.triggered.connect(slot)
-        return action
+    def create_action(self, text, function):
+        """
+        Crear una acción para el menú contextual.
+        
+        Args:
+            text (str): Texto de la acción.
+            function (function): Función que se ejecutará al activar la acción.
+            
+        Returns:
+            QAction: Acción creada.
+        """
+        action = QAction(text, self)  # Crear QAction con el texto y la ventana principal asociada
+        action.triggered.connect(function)  # Conectar la acción con la función proporcionada
+        return action  # Devolver la acción creada
 
-    def opc_probar_conexiones(self, icon):
-        from device_manager import ping_devices
-        self.set_icon_color(icon, "yellow")
-        tiempo_inicial = self.iniciar_cronometro()
-        device_status = ping_devices()
-        self.finalizar_cronometro(icon, tiempo_inicial)
-        device_status_str = "\n".join([f"{ip}: {status}" for ip, status in device_status.items()])
-        # Mostrar un cuadro de diálogo con la información
-        QMessageBox.information(None, "Conexiones de dispositivos", device_status_str)
-        self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
-        return
-    
-    def opc_actualizar_hora_dispositivos(self, icon):
-        self.set_icon_color(icon, "yellow")
-        tiempo_inicial = self.iniciar_cronometro()
-        actualizar_hora_dispositivos()
-        self.finalizar_cronometro(icon, tiempo_inicial)
-        self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
-        return
-    
+    def show_message(self, title, text):
+        """
+        Mostrar un cuadro de diálogo con un mensaje.
+
+        Args:
+            title (str): Título del cuadro de diálogo.
+            text (str): Texto del mensaje.
+        """
+        msg_box = QMessageBox()  # Crear instancia de QMessageBox
+        msg_box.setWindowTitle(title)  # Establecer el título del cuadro de diálogo
+        msg_box.setText(text)  # Establecer el texto del mensaje
+        msg_box.setIcon(QMessageBox.Information)  # Establecer el ícono del cuadro de diálogo (información)
+        msg_box.exec_()  # Mostrar el cuadro de diálogo
+
+        # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
+        if self.tray_icon:
+            self.tray_icon.contextMenu().setVisible(True)
+
+    def set_icon_color(self, icon, color):
+        """
+        Cambiar el color del ícono en la bandeja del sistema.
+
+        Args:
+            icon (QSystemTrayIcon): Ícono en la bandeja del sistema a modificar.
+            color (str): Color a establecer ('red', 'yellow', 'green').
+        """
+        self.color_icon = color  # Actualizar el color del ícono
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono con el nuevo color
+        icon.setIcon(QIcon(file_path))  # Establecer el nuevo ícono con el color especificado
+
     def iniciar_cronometro(self):
-        return time.time()
-    
-    def finalizar_cronometro(self, icon, tiempo_inicial):
-        tiempo_final = self.iniciar_cronometro()
-        tiempo_transcurrido = tiempo_final - tiempo_inicial
-        icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)
-        return
+        """
+        Iniciar el cronómetro y devolver el tiempo actual.
 
-    def opc_marcaciones_dispositivos(self, icon):
-        self.set_icon_color(icon, "yellow")
-        tiempo_inicial = self.iniciar_cronometro()
-        gestionar_marcaciones_dispositivos()
-        self.finalizar_cronometro(icon, tiempo_inicial)
-        self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
-        return
+        Returns:
+            float: Tiempo actual en segundos.
+        """
+        return time.time()  # Devolver el tiempo actual en segundos
 
-    # Definir una función para cambiar el estado de la checkbox
-    def toggle_checkbox_clear_attendance(self, pChecked):
-        self.checked = pChecked
-        logging.debug(f"Status checkbox: {self.checked}")
-        # Modificar el valor del campo deseado
+    def finalizar_cronometro(self, tiempo_inicial):
+        """
+        Finalizar el cronómetro, calcular el tiempo transcurrido y mostrar una notificación.
+
+        Args:
+            tiempo_inicial (float): Tiempo inicial obtenido al iniciar el cronómetro.
+        """
+        tiempo_final = self.iniciar_cronometro()  # Obtener el tiempo final
+        tiempo_transcurrido = tiempo_final - tiempo_inicial  # Calcular el tiempo transcurrido
+        self.tray_icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)  # Mostrar notificación con el tiempo transcurrido
+
+    @pyqtSlot()
+    def opt_start_execution(self):
+        """
+        Opción para iniciar la ejecución de la aplicación.
+        """
+        self.is_running = True  # Marcar que la aplicación está corriendo
+        self.set_icon_color(self.tray_icon, "green")  # Establecer el color del ícono a verde
+        try:
+            self.schedule_thread = threading.Thread(target=self.run_schedule)  # Crear hilo para ejecutar run_schedule
+            logging.debug('Hilo iniciado...')  # Registro de depuración: hilo iniciado
+            self.schedule_thread.start()  # Iniciar el hilo
+        except Exception as e:
+            logging.critical(e)  # Registro crítico si ocurre un error al iniciar el hilo
+
+    @pyqtSlot()
+    def opt_stop_execution(self):
+        """
+        Opción para detener la ejecución de la aplicación.
+        """
+        if self.schedule_thread and self.schedule_thread.is_alive():
+            self.schedule_thread.join()  # Esperar a que el hilo termine
+        logging.debug('Hilo detenido...')  # Registro de depuración: hilo detenido
+        self.set_icon_color(self.tray_icon, "red")  # Establecer el color del ícono a rojo
+
+    @pyqtSlot()
+    def opt_restart_execution(self):
+        """
+        Opción para reiniciar la ejecución de la aplicación.
+        """
+        self.opt_stop_execution()  # Detener la ejecución actual
+        self.opt_start_execution()  # Iniciar la ejecución nuevamente
+
+    @pyqtSlot()
+    def opt_test_connections(self):
+        """
+        Opción para probar las conexiones de dispositivos.
+        """
+        self.set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
+        try:
+            from device_manager import ping_devices  # Importar función para hacer ping a dispositivos
+            tiempo_inicial = self.iniciar_cronometro()  # Iniciar el cronómetro
+            device_status = ping_devices()  # Obtener estado de los dispositivos
+            self.finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
+            device_status_str = "\n".join([f"{ip}: {status}" for ip, status in device_status.items()])  # Formatear resultados como texto
+            self.set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+            self.show_message("Conexiones de dispositivos", device_status_str)  # Mostrar cuadro de diálogo con información
+        except Exception as e:
+            logging.error(f"Error al mostrar cantidad de marcaciones: {e}")  # Registro de error si falla la operación
+
+    @pyqtSlot()
+    def opt_update_device_time(self):
+        """
+        Opción para actualizar la hora en los dispositivos.
+        """
+        self.set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
+        tiempo_inicial = self.iniciar_cronometro()  # Iniciar el cronómetro
+        actualizar_hora_dispositivos()  # Llamar a función para actualizar hora en dispositivos (se asume que está definida en otro lugar)
+        self.finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
+        self.set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+
+    @pyqtSlot()
+    def opt_fetch_device_attendances(self):
+        """
+        Opción para obtener las marcaciones de los dispositivos.
+        """
+        self.set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
+        tiempo_inicial = self.iniciar_cronometro()  # Iniciar el cronómetro
+        gestionar_marcaciones_dispositivos()  # Llamar a función para gestionar marcaciones de dispositivos (se asume que está definida en otro lugar)
+        self.finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
+        self.set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+
+    @pyqtSlot()
+    def opt_show_attendances_count(self):
+        """
+        Opción para mostrar la cantidad de marcaciones por dispositivo.
+        """
+        self.set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
+        try:
+            tiempo_inicial = self.iniciar_cronometro()  # Iniciar el cronómetro
+            cantidad_marcaciones = obtener_cantidad_marcaciones()  # Llamar a función para obtener cantidad de marcaciones por dispositivo (se asume que está definida en otro lugar)
+            self.finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
+            cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])  # Formatear resultados como texto
+            self.set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+            self.show_message("Marcaciones por dispositivo", cantidad_marcaciones_str)  # Mostrar cuadro de diálogo con información
+        except Exception as e:
+            logging.error(f"Error al mostrar cantidad de marcaciones: {e}")  # Registro de error si falla la operación
+
+    @pyqtSlot()
+    def opt_toggle_checkbox_clear_attendance(self):
+        """
+        Opción para alternar el estado del checkbox de eliminar marcaciones.
+        """
+        self.checked = not self.checked  # Invertir el estado actual del checkbox
+        logging.debug(f"Status checkbox: {self.checked}")  # Registro de depuración: estado actual del checkbox
+        # Modificar el valor del campo deseado en el archivo de configuración
         config['Device_config']['clear_attendance'] = str(self.checked)
         # Escribir los cambios de vuelta al archivo de configuración
         with open('config.ini', 'w') as config_file:
             config.write(config_file)
-    
-    def mostrar_cantidad_marcaciones(self, icon):
-        # Crear una ventana emergente de tkinter
-        self.set_icon_color(icon, "yellow")
-        try:
-            tiempo_inicial = self.iniciar_cronometro()
-            cantidad_marcaciones = obtener_cantidad_marcaciones()
-            self.finalizar_cronometro(icon, tiempo_inicial)
-            cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])
-            # Mostrar un cuadro de diálogo con la información
-            QMessageBox.information(None, "Marcaciones por dispositivo", cantidad_marcaciones_str)
-        except Exception as e:
-            logging.error(f"Error al mostrar cantidad de marcaciones: {e}")
-        finally:
-            self.set_icon_color(icon, "green") if self.is_running else self.set_icon_color(icon, "red")
 
-    def set_icon_color(self, icon, color):
-        # Función para cambiar el color del ícono
-        self.colorIcon = color
-        filePath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.colorIcon}.png")
-        icon.setIcon(QIcon(filePath))
-
-    def exit_icon(self, icon):
-        # Función para salir del programa
-        try:
-            logging.debug(schedule.get_jobs())
+    @pyqtSlot()
+    def opt_exit_icon(self):
+        """
+        Opción para salir de la aplicación.
+        """
+        if self.tray_icon:
+            logging.debug(schedule.get_jobs())  # Registro de depuración: obtener trabajos programados
             if len(schedule.get_jobs()) >= 1:
-                self.stop_execution(icon)
-            icon.hide()
-            self.app.quit()
-        except Exception as e:
-            logging.critical(e)
+                self.opt_stop_execution()  # Detener la ejecución si hay trabajos programados
+            self.tray_icon.hide()  # Ocultar el ícono en la bandeja del sistema
+            QApplication.quit()  # Salir de la aplicación
 
-    def configurar_schedule(self, icon):
-        '''
-        Configura las tareas programadas en base a las horas cargadas desde el archivo.
-        '''
+def configurar_schedule():
+    '''
+    Configurar las tareas programadas en base a las horas cargadas desde el archivo.
+    '''
 
-        # Lee las horas de ejecución desde el archivo de texto
-        filePath = os.path.join(os.path.abspath('.'), 'schedule.txt')
-        hoursToPerform = None
-        try:
-            hoursToPerform = cargar_desde_archivo(filePath)
-        except Exception as e:
-            logging.error(e)
+    # Ruta del archivo de texto que contiene las horas de ejecución
+    file_path = os.path.join(os.path.abspath('.'), 'schedule.txt')
+    hours_to_perform = None
+    try:
+        hours_to_perform = cargar_desde_archivo(file_path)  # Cargar horas desde el archivo (función definida en file_manager)
+    except Exception as e:
+        logging.error(e)  # Registro de error si falla la operación
 
-        if hoursToPerform: 
-            # Itera las horas de ejecución
-            for hourToPerform in hoursToPerform:
-                '''
-                Ejecuta la tarea de actualizar hora y guarda las 
-                marcaciones en archivos (individual y en conjunto)
-                en la hora especificada en schedule.txt
-                '''
+    if hours_to_perform:
+        # Iterar las horas de ejecución
+        for hour_to_perform in hours_to_perform:
+            '''
+            Ejecutar la tarea de actualizar hora y guardar las 
+            marcaciones en archivos (individual y en conjunto)
+            en la hora especificada en schedule.txt
+            '''
 
-                schedule.every().day.at(hourToPerform).do(gestionar_marcaciones_dispositivos)
+            schedule.every().day.at(hour_to_perform).do(gestionar_marcaciones_dispositivos)  # Programar tarea diaria a la hora especificada

@@ -22,7 +22,6 @@ from device_manager import *
 from errors import HoraDesactualizada
 from utils import logging
 import threading
-import sys
 
 def actualizar_hora_dispositivos():
     infoDevices = None
@@ -68,9 +67,6 @@ def actualizar_hora_dispositivo(infoDevice, conn):
     return
 
 def reintentar_conexion_hora(infoDevice):
-    # Redirigir stdout y stderr
-    sys.stdout = open(os.devnull, 'w')
-    sys.stderr = open(os.devnull, 'w')
     try:
         conn = reintentar_conexion(infoDevice)
         actualizar_hora_dispositivo(infoDevice, conn)
