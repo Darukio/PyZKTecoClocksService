@@ -18,7 +18,10 @@
 """
 
 import os
+import threading
 from utils import logging
+
+file_lock = threading.Lock()
 
 def cargar_desde_archivo(filePath):
     '''
@@ -54,6 +57,7 @@ def crear_carpeta_y_devolver_ruta(*args):
     return rutaDestino
 
 def guardar_marcaciones_en_archivo(attendances, file):
+    file_lock.acquire()
     try:
         with open(file, 'a') as f:
             for attendance in attendances:
@@ -67,4 +71,5 @@ def guardar_marcaciones_en_archivo(attendances, file):
                 f.write(f"{attendance['user_id']} {attendance['timestamp']} {attendance['id']} {attendance['status']}\n")
     except Exception as e:
         logging.error(f'Process terminate: {e}')
-        
+    finally:
+        file_lock.release()
