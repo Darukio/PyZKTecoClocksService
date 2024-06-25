@@ -19,6 +19,7 @@
 
 import threading
 import queue
+import time
 from connection import *
 from file_manager import *
 from errors import ConexionFallida
@@ -67,15 +68,29 @@ def reintentar_conexion(infoDevice):
     logging.info(f'Retrying connection to device {infoDevice["ip"]}...')
     intentos_maximos = 3
     intentos = 0
+    t_inicio_reintento_total = time.time()
     while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
         try:
+            t_inicio_reintento = time.time()
             conn = conectar(infoDevice['ip'], port=4370)
             return conn
         except Exception as e:
             logging.warning(f'Failed to connect to device {infoDevice['ip']}. Retrying...')
             intentos += 1
-    logging.error(f'Unable to connect to device {infoDevice['ip']} after {intentos} attempts.')    
+        finally:
+            time.sleep(1)
+            t_reintento = finalizar_cronometro(t_inicio_reintento)
+            logging.debug(f'Tiempo de reintento {intentos} de {infoDevice["ip"]}: {t_reintento}')
+            logging.debug(conn)
+            if conn or intentos == intentos_maximos:
+                t_reintento_total = finalizar_cronometro(t_inicio_reintento_total)
+                logging.debug(f'Tiempo total de reintento de {infoDevice["ip"]}: {t_reintento_total}')
+    logging.error(f'Unable to connect to device {infoDevice['ip']} after {intentos} attempts.')
     raise ConexionFallida(infoDevice['nombreModelo'], infoDevice['puntoMarcacion'], infoDevice['ip'])
+
+def finalizar_cronometro(tiempo_inicial):
+    tiempo_final = time.time()
+    return tiempo_final-tiempo_inicial
 
 def ping_devices():
     infoDevices = None
