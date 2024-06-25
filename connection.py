@@ -28,7 +28,7 @@ config = configparser.ConfigParser()
 def conectar(ip, port):
     conn = None
     try:
-        zk = ZK(ip, port, timeout=60)
+        zk = ZK(ip, port)
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
     except Exception as e:
