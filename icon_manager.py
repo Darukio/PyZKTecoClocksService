@@ -10,6 +10,7 @@ from attendances_manager import *
 from hour_manager import *
 from file_manager import cargar_desde_archivo
 from utils import logging
+from window_manager import DeviceStatusDialog
 
 # Para leer un archivo INI
 config = configparser.ConfigParser()
@@ -23,6 +24,7 @@ class MainWindow(QMainWindow):
         self.checked = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
 
         self.tray_icon = None  # Variable para almacenar el QSystemTrayIcon
+        self.device_status_dialog = None
         self.__init_ui()  # Inicialización de la interfaz de usuario
         configurar_schedule()  # Configuración de las tareas programadas
 
@@ -33,6 +35,7 @@ class MainWindow(QMainWindow):
         # Crear y configurar el ícono en la bandeja del sistema
         self.color_icon = "red"  # Color inicial del ícono
         self.__create_tray_icon()  # Creación del ícono en la bandeja del sistema
+        self.device_status_dialog = DeviceStatusDialog()  # Obtener estado de los dispositivos
 
     def __create_tray_icon(self):
         '''
@@ -173,15 +176,13 @@ class MainWindow(QMainWindow):
         """
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
         try:
-            from device_manager import ping_devices  # Importar función para hacer ping a dispositivos
-            tiempo_inicial = self.__iniciar_cronometro()  # Iniciar el cronómetro
-            device_status = ping_devices()  # Obtener estado de los dispositivos
-            self.__finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
-            device_status_str = "\n".join([f"{ip}: {status}" for ip, status in device_status.items()])  # Formatear resultados como texto
+            self.device_status_dialog.exec_()
             self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
-            self.__show_message("Conexiones de dispositivos", device_status_str)  # Mostrar cuadro de diálogo con información
+            # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
+            if self.tray_icon:
+                self.tray_icon.contextMenu().setVisible(True)
         except Exception as e:
-            logging.error(f"Error al mostrar cantidad de marcaciones: {e}")  # Registro de error si falla la operación
+            logging.error(f"Error al mostrar conexiones de dispositivos: {e}")  # Registro de error si falla la operación
 
     @pyqtSlot()
     def __opt_update_devices_time(self):

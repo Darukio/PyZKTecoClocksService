@@ -16,7 +16,7 @@ python install.py # Instala las dependencias en un entorno virtual venv
 
 ```bash
 # Ejecutar en la consola con permisos de admin
-pyinstaller.exe --noconsole --onefile -n "Gestor Reloj de Asistencias" --windowed -i "resources/energiademisiones.ico" --add-data "resources/system tray/*;resources/system tray" --debug all main.py
+pyinstaller.exe --noconsole --onefile -n "Gestor Reloj de Asistencias" -i "resources/energiademisiones.ico" --add-data "resources/system tray/*;resources/system tray" --debug all main.py
 # Configura la inicialización del ejecutable cuando se enciende la PC
 python configure_startup.py
 # Ejecutar main.exe

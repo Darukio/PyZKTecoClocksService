@@ -145,8 +145,11 @@ def obtener_cantidad_marcaciones():
                         intentos += 1
                     
                 if conn:
-                    conn.get_attendance()
-                    cantidad_marcaciones[infoDevice["ip"]] = conn.records
+                    try:
+                        conn.get_attendance()
+                        cantidad_marcaciones[infoDevice["ip"]] = conn.records
+                    except Exception as e:
+                        cantidad_marcaciones[infoDevice["ip"]] = 'Conexión fallida'
                 else:
                     cantidad_marcaciones[infoDevice["ip"]] = 'Conexión fallida'
                 

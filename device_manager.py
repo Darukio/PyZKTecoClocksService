@@ -18,7 +18,6 @@
 """
 
 import threading
-import queue
 import time
 from connection import *
 from file_manager import *
@@ -102,52 +101,27 @@ def ping_devices():
         logging.error(e)
 
     results = {}
-    results_queue = queue.Queue()
     if infoDevices:
-        threads = []
         # Itera a través de los dispositivos
         for infoDevice in infoDevices:
             # Si el dispositivo se encuentra activo...
             if eval(infoDevice["activo"]):
                 conn = None
+                status = None
                     
                 try:
                     conn = conectar(infoDevice["ip"], port=4370)
-                    results[infoDevice["ip"]] = "Conexión exitosa"
+                    status = "Conexión exitosa"
                     finalizar_conexion(conn)
                 except Exception as e:
-                    try:
-                        thread = threading.Thread(target=reintentar_ping_device, args=(infoDevice,results_queue,))
-                        thread.start()
-                        threads.append(thread)
-                    except Exception as e:
-                        logging.error(e)
+                    status = "Conexión fallida"
 
-        # Espera a que todos los hilos hayan terminado
-        if threads:
-            logging.debug(threads)
-            for thread in threads:
-                thread.join()
-        
-        logging.debug(results)
-        # Procesar los resultados de la cola
-        while not results_queue.empty():
-            result = results_queue.get()
-            logging.debug(result)
-            logging.debug(f'{result["ip"]} - {result["status"]}')
-            ip = result["ip"]
-            status = result["status"]
-            results[ip] = status
+                # Guardar la información en results
+                results[infoDevice["ip"]] = {
+                    "puntoMarcacion": infoDevice["puntoMarcacion"],
+                    "nombreDistrito": infoDevice["nombreDistrito"],
+                    "id": infoDevice["id"],
+                    "status": status
+                }
 
     return results
-
-def reintentar_ping_device(infoDevice, results_queue):
-    try:
-        conn = reintentar_conexion(infoDevice)
-        results_queue.put({"ip": infoDevice["ip"], "status": "Conexión exitosa"})
-        logging.debug(f'{"ip": infoDevice["ip"], "status": "Conexión exitosa"}')
-        finalizar_conexion(conn)
-    except Exception as e:
-        results_queue.put({"ip": infoDevice["ip"], "status": "Conexión fallida"})
-        logging.debug(f'{"ip": infoDevice["ip"], "status": "Conexión fallida"}')
-    return
