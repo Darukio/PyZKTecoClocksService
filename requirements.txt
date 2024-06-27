@@ -1,6 +1,6 @@
-pywin32
-schedule
-pyzk
-PyQt5
+git+https://github.com/Darukio/pyzk.git
 pillow
 pyinstaller
+pyqt5
+pywin32
+schedule
