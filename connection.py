@@ -26,9 +26,13 @@ import configparser
 config = configparser.ConfigParser()
 
 def conectar(ip, port):
+    config.read('config.ini')
     conn = None
     try:
-        zk = ZK(ip, port)
+        zk = ZK(ip, port, omit_ping=config['Network_config']['omit_ping'], 
+        ping_packages_size=config['Network_config']['ping_packages_size'], 
+        latency_limit=config['Network_config']['latency_limit'], 
+        package_loss_limit=config['Network_config']['package_loss_limit'])
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
     except Exception as e:

@@ -25,6 +25,10 @@ from errors import HoraDesactualizada
 from utils import logging
 import threading
 import os
+import configparser
+
+# Para leer un archivo INI
+config = configparser.ConfigParser()
 
 def gestionar_marcaciones_dispositivos():
     infoDevices = None
@@ -124,7 +128,8 @@ def obtener_cantidad_marcaciones():
         logging.error(e)
 
     cantidad_marcaciones = {}
-    intentos_maximos = 3
+    config.read('config.ini')
+    intentos_maximos = config['Network_config']['retry_connection']
 
     if infoDevices:
         # Itera a través de los dispositivos
@@ -134,23 +139,22 @@ def obtener_cantidad_marcaciones():
                 conn = None
 
                 intentos = 0
-
                 while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
                     try:
                         conn = conectar(infoDevice['ip'], port=4370)
-                        if conn:
-                            break
+                        break
                     except Exception as e:
                         logging.warning(f'Failed to connect to device {infoDevice['ip']}. Retrying...')
                         intentos += 1
-                    
-                if conn:
+                
+                intentos = 0
+                cantidad_marcaciones[infoDevice["ip"]] = 'Conexión fallida'
+                while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
                     try:
                         conn.get_attendance()
                         cantidad_marcaciones[infoDevice["ip"]] = conn.records
+                        break
                     except Exception as e:
-                        cantidad_marcaciones[infoDevice["ip"]] = 'Conexión fallida'
-                else:
-                    cantidad_marcaciones[infoDevice["ip"]] = 'Conexión fallida'
-                
+                        intentos += 1
+
     return cantidad_marcaciones

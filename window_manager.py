@@ -40,10 +40,6 @@ class DeviceStatusDialog(QDialog):
 
         layout.addWidget(self.label_actualizando)
 
-        # Spacer vertical para separar la tabla del botón
-        spacer = QSpacerItem(5, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        layout.addItem(spacer)
-
         # Botón "Actualizar"
         self.btn_actualizar = QPushButton("Actualizar", self)
         self.btn_actualizar.clicked.connect(self.update_data)

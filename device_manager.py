@@ -23,6 +23,10 @@ from connection import *
 from file_manager import *
 from errors import ConexionFallida
 from utils import logging
+import configparser
+
+# Para leer un archivo INI
+config = configparser.ConfigParser()
 
 def organizar_info_dispositivos(line):
     # Dividir la línea en partes utilizando el separador " - "
@@ -63,9 +67,10 @@ def obtener_info_dispositivos():
     return infoDevices
 
 def reintentar_conexion(infoDevice):
+    config.read('config.ini')
+    intentos_maximos = config['Network_config']['retry_connection']
     conn = None
     logging.info(f'Retrying connection to device {infoDevice["ip"]}...')
-    intentos_maximos = 3
     intentos = 0
     t_inicio_reintento_total = time.time()
     while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
