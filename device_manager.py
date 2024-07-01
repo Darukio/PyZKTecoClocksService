@@ -68,7 +68,7 @@ def obtener_info_dispositivos():
 
 def reintentar_conexion(infoDevice):
     config.read('config.ini')
-    intentos_maximos = config['Network_config']['retry_connection']
+    intentos_maximos = int(config['Network_config']['retry_connection'])
     conn = None
     logging.info(f'Retrying connection to device {infoDevice["ip"]}...')
     intentos = 0

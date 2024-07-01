@@ -129,7 +129,7 @@ def obtener_cantidad_marcaciones():
 
     cantidad_marcaciones = {}
     config.read('config.ini')
-    intentos_maximos = config['Network_config']['retry_connection']
+    intentos_maximos = int(config['Network_config']['retry_connection'])
 
     if infoDevices:
         # Itera a través de los dispositivos
