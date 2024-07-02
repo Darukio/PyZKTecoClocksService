@@ -21,47 +21,43 @@ from datetime import datetime
 import os
 import logging
 
-class ConexionFallida(Exception):
-    def __init__(self, nombreModelo, puntoMarcacion, ip):
-        super().__init__()
+class ErrorConEscrituraEnArchivo(Exception):
+    def __init__(self, nombre_modelo, punto_marcacion, ip, message_prefix):
         try:
             from file_manager import crear_carpeta_y_devolver_ruta
-            # Call the function from the imported module
-            folderPath = crear_carpeta_y_devolver_ruta('devices', 'errors')
-            newtime = datetime.today().date()
-            dateString = newtime.strftime("%Y-%m-%d")
-            logging.debug(dateString)
-            fileName = f'errors_{dateString}.txt'
-            logging.debug(fileName)
-            filePath = os.path.join(folderPath, fileName)
-            hourString = datetime.now().strftime("%H:%M:%S")
-            self.mensaje = f'{hourString} Conexion fallida con {nombreModelo} - {puntoMarcacion}: {ip}\n' 
-            with open(filePath, 'a') as file:
+            # Llama a la función desde el módulo importado
+            folder_path = crear_carpeta_y_devolver_ruta('devices', 'errors')
+            new_date = datetime.today().date().strftime("%Y-%m-%d")
+            file_name = f'errors_{new_date}.txt'
+            file_path = os.path.join(folder_path, file_name)
+            current_time = datetime.now().strftime("%H:%M:%S")
+            self.mensaje = f'{current_time} {message_prefix} {nombre_modelo} - {punto_marcacion}: {ip}\n'
+            with open(file_path, 'a') as file:
                 file.write(self.mensaje)
+            self.mensaje = f'{message_prefix} {nombre_modelo} - {punto_marcacion}: {ip}'
+            super().__init__(self.mensaje)
         except Exception as e:
-            logging.error(e)
+            logging.error(f'Error al manejar excepción: {e}')
 
-class HoraDesactualizada(Exception):
-    def __init__(self, nombreModelo, puntoMarcacion, ip):
-        super().__init__()
-        try:
-            from file_manager import crear_carpeta_y_devolver_ruta
-            # Call the function from the imported module
-            folderPath = crear_carpeta_y_devolver_ruta('devices', 'errors')
-            newtime = datetime.today().date()
-            dateString = newtime.strftime("%Y-%m-%d")
-            logging.debug(dateString)
-            fileName = f'errors_{dateString}.txt'
-            logging.debug(fileName)
-            filePath = os.path.join(folderPath, fileName)
-            hourString = datetime.now().strftime("%H:%M:%S")
-            self.mensaje = f'{hourString} Pila fallando de {nombreModelo} - {puntoMarcacion}: {ip}\n' 
-            with open(filePath, 'a') as file:
-                file.write(self.mensaje)
-        except Exception as e:
-            logging.error(e)
-    
+class IntentoConexionFallida(Exception):
+    pass
+
+class ConexionFallida(ErrorConEscrituraEnArchivo):
+    def __init__(self, nombre_modelo, punto_marcacion, ip):
+        message_prefix = 'Conexion fallida con'
+        super().__init__(nombre_modelo, punto_marcacion, ip, message_prefix)
+
+class HoraValidacionFallida(Exception):
+    def __init__(self):
+        self.mensaje = 'Hours or date between device and machine doesn\'t match'
+        super().__init__(self.mensaje)
+
+class HoraDesactualizada(ErrorConEscrituraEnArchivo):
+    def __init__(self, nombre_modelo, punto_marcacion, ip):
+        message_prefix = 'Pila fallando de'
+        super().__init__(nombre_modelo, punto_marcacion, ip, message_prefix)
+
 class CargaArchivoFallida(Exception):
-    def __init__(self, filePath):
-        self.mensaje = f'Carga fallida del archivo {filePath}: {str(Exception)}' 
+    def __init__(self, file_path):
+        self.mensaje = f'Carga fallida del archivo {file_path}'
         super().__init__(self.mensaje)

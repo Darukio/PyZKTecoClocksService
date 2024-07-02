@@ -21,64 +21,65 @@ from connection import *
 from device_manager import *
 from file_manager import *
 from datetime import datetime
-from errors import HoraDesactualizada
+from errors import *
 from utils import logging
-import threading
 import os
 import configparser
+import eventlet
 
 # Para leer un archivo INI
 config = configparser.ConfigParser()
 
 def gestionar_marcaciones_dispositivos():
-    infoDevices = None
+    info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
-        infoDevices = obtener_info_dispositivos()
+        info_devices = obtener_info_dispositivos()
     except Exception as e:
         logging.error(e)
+        
+    if info_devices:
+        gt = []
 
-    if infoDevices:
-        threads = []
-        # Itera a través de los dispositivos
-        for infoDevice in infoDevices:
+        # Crea un pool de green threads
+        pool = eventlet.GreenPool(10)
+        
+        for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
-            if eval(infoDevice["activo"]):
-                conn = None
-                    
-                try:
-                    conn = conectar(infoDevice["ip"], port=4370)
-                except Exception as e:
-                    thread = threading.Thread(target=reintentar_conexion_marcaciones_dispositivo, args=(infoDevice,))
-                    thread.start()
-                    threads.append(thread)
-
-                gestionar_marcaciones_dispositivo(infoDevice, conn)
-
-        # Espera a que todos los hilos hayan terminado
-        if threads:
-            for thread in threads:
-                thread.join()
-
-def gestionar_marcaciones_dispositivo(infoDevice, conn):
-    if conn:
-        logging.debug(conn)
-        logging.debug(conn.get_platform())
-        logging.debug(conn.get_device_name())
-        logging.info(f'Processing IP: {infoDevice["ip"]}')
-        try:
+            if eval(info_device["activo"]):
+                # Lanza una corutina para cada dispositivo activo
+                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device))
+        
+        # Espera a que todas las corutinas en el pool hayan terminado
+        for g in gt:
             try:
-                actualizar_hora(conn)
+                g.wait()
             except Exception as e:
-                raise HoraDesactualizada(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
-        except HoraDesactualizada as e:
-            pass
-        attendances = obtener_marcaciones(conn)
-        attendances = format_attendances(attendances, infoDevice["id"])
-        logging.info(f'{infoDevice["ip"]} - Attendances: {attendances}')
-        gestionar_marcaciones_individual(infoDevice, attendances)
+                logging.error(e)
+
+def gestionar_marcaciones_dispositivo(info_device):
+    conn = None
+
+    try:
+        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370))
+
+        logging.info(f'Processing IP: {info_device["ip"]}')
+        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(conn))
+        attendances = format_attendances(attendances, info_device["id"])
+        logging.info(f'{info_device["ip"]} - Attendances: {attendances}')
+        
+        gestionar_marcaciones_individual(info_device, attendances)
         gestionar_marcaciones_global(attendances)
-        finalizar_conexion(conn)
+    except IntentoConexionFallida as e:
+        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
+    except Exception as e:
+        raise e
+    finally:
+        if conn:
+            finalizar_conexion(conn)
+    
+    actualizar_hora_dispositivo(info_device)
+
     return
 
 def format_attendances(attendances, id):
@@ -94,67 +95,70 @@ def format_attendances(attendances, id):
         formatted_attendances.append(attendance_formatted)
     return formatted_attendances
 
-def reintentar_conexion_marcaciones_dispositivo(infoDevice):
-    try:
-        conn = reintentar_conexion(infoDevice)
-        gestionar_marcaciones_dispositivo(infoDevice, conn)
-    except Exception as e:
-        pass
-    return
-
-def gestionar_marcaciones_individual(infoDevice, attendances):
-    folderPath = crear_carpeta_y_devolver_ruta('devices', infoDevice["nombreDistrito"], infoDevice["nombreModelo"] + "-" + infoDevice["puntoMarcacion"])
-    newtime = datetime.today().date()
-    dateString = newtime.strftime("%Y-%m-%d")
-    fileName = infoDevice["ip"]+'_'+dateString+'_file.cro'
-    gestionar_guardado_de_marcaciones(attendances, folderPath, fileName)
+def gestionar_marcaciones_individual(info_device, attendances):
+    folder_path = crear_carpeta_y_devolver_ruta('devices', info_device["nombre_distrito"], info_device["nombre_modelo"] + "-" + info_device["punto_marcacion"])
+    new_time = datetime.today().date()
+    date_string = new_time.strftime("%Y-%m-%d")
+    file_name = info_device["ip"]+'_'+date_string+'_file.cro'
+    gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 
 def gestionar_marcaciones_global(attendances):
-    folderPath = os.path.abspath('.')
-    fileName = 'attendances_file.txt'
-    gestionar_guardado_de_marcaciones(attendances, folderPath, fileName)
+    folder_path = os.path.abspath('.')
+    file_name = 'attendances_file.txt'
+    gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 
-def gestionar_guardado_de_marcaciones(attendances, folderPath, fileName):
-    destinyPath = os.path.join(folderPath, fileName)
-    logging.debug(f'DestinyPath: {destinyPath}')
-    guardar_marcaciones_en_archivo(attendances, destinyPath)
+def gestionar_guardado_de_marcaciones(attendances, folder_path, file_name):
+    destiny_path = os.path.join(folder_path, file_name)
+    logging.debug(f'DestinyPath: {destiny_path}')
+    guardar_marcaciones_en_archivo(attendances, destiny_path)
 
-def obtener_cantidad_marcaciones():
-    infoDevices = None
+def obtener_cantidad_marcaciones_dispositivos():
+    info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
-        infoDevices = obtener_info_dispositivos()
+        info_devices = obtener_info_dispositivos()
     except Exception as e:
         logging.error(e)
 
     cantidad_marcaciones = {}
-    config.read('config.ini')
-    intentos_maximos = int(config['Network_config']['retry_connection'])
 
-    if infoDevices:
-        # Itera a través de los dispositivos
-        for infoDevice in infoDevices:
+    if info_devices:
+        cantidad_marcaciones = {}
+        info_devices_active = []
+        gt = []
+
+        # Crea un pool de green threads
+        pool = eventlet.GreenPool(10)
+        
+        for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
-            if eval(infoDevice["activo"]) == True:
-                conn = None
+            if eval(info_device["activo"]):
+                # Lanza una corutina para cada dispositivo activo
+                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device))
+                info_devices_active.append(info_device)
 
-                intentos = 0
-                while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
-                    try:
-                        conn = conectar(infoDevice['ip'], port=4370)
-                        break
-                    except Exception as e:
-                        logging.warning(f'Failed to connect to device {infoDevice['ip']}. Retrying...')
-                        intentos += 1
-                
-                intentos = 0
-                cantidad_marcaciones[infoDevice["ip"]] = 'Conexión fallida'
-                while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
-                    try:
-                        conn.get_attendance()
-                        cantidad_marcaciones[infoDevice["ip"]] = conn.records
-                        break
-                    except Exception as e:
-                        intentos += 1
+        # Espera a que todas las corutinas en el pool hayan terminado
+        for info_device_active, g in zip(info_devices_active, gt):
+            try:
+                cantidad_marcaciones[info_device_active["ip"]] = g.wait()
+            except Exception as e:
+                cantidad_marcaciones[info_device_active["ip"]] = 'Conexión fallida'
 
     return cantidad_marcaciones
+
+def obtener_cantidad_marcaciones_dispositivo(info_device):
+    conn = None
+                    
+    try:
+        conn = reintentar_operacion_de_red(conectar, args=(info_device["ip"], 4370))
+
+        logging.info(f'Processing IP: {info_device["ip"]}')
+        reintentar_operacion_de_red(conn.get_attendance())
+        return reintentar_operacion_de_red(conn.records)
+    except IntentoConexionFallida as e:
+        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip']) from e
+    except Exception as e:
+        raise e
+    finally:
+        if conn:
+            finalizar_conexion(conn)

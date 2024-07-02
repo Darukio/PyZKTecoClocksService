@@ -19,57 +19,53 @@
 
 from connection import *
 from device_manager import *
-from errors import HoraDesactualizada
+from errors import *
 from utils import logging
-import threading
+import eventlet
 
 def actualizar_hora_dispositivos():
-    infoDevices = None
+    info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
-        infoDevices = obtener_info_dispositivos()
+        info_devices = obtener_info_dispositivos()
     except Exception as e:
         logging.error(e)
 
-    if infoDevices:
-        threads = []
-        # Itera a través de los dispositivos
-        for infoDevice in infoDevices:
+    if info_devices:
+        gt = []
+
+        # Crea un pool de green threads
+        pool = eventlet.GreenPool(10)
+        
+        for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
-            if eval(infoDevice["activo"]):
-                conn = None
-                        
-                try:
-                    conn = conectar(infoDevice["ip"], port=4370)
-                except Exception as e:
-                    thread = threading.Thread(target=reintentar_conexion_hora, args=(infoDevice,))
-                    thread.start()
-                    threads.append(thread)
-
-                actualizar_hora_dispositivo(infoDevice, conn)
-    
-        # Espera a que todos los hilos hayan terminado
-        if threads:
-            for thread in threads:
-                thread.join()
-
-def actualizar_hora_dispositivo(infoDevice, conn):
-    if conn:
-        logging.info(f'Processing IP: {infoDevice["ip"]}')
-        try:
+            if eval(info_device["activo"]):
+                # Lanza una corutina para cada dispositivo activo
+                gt.append(pool.spawn(actualizar_hora_dispositivo, info_device))
+        
+        # Espera a que todas las corutinas en el pool hayan terminado
+        for g in gt:
             try:
-                actualizar_hora(conn)
+                g.wait()
             except Exception as e:
-                raise HoraDesactualizada(infoDevice["nombreModelo"], infoDevice["puntoMarcacion"], infoDevice["ip"]) from e
-        except HoraDesactualizada as e:
-            pass
-        finalizar_conexion(conn)
-    return
+                logging.error(e)
 
-def reintentar_conexion_hora(infoDevice):
+def actualizar_hora_dispositivo(info_device):
+    conn = None
+
     try:
-        conn = reintentar_conexion(infoDevice)
-        actualizar_hora_dispositivo(infoDevice, conn)
+        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370))
+
+        logging.info(f'Processing IP: {info_device["ip"]}')
+        reintentar_operacion_de_red(actualizar_hora, conn)
+    except IntentoConexionFallida as e:
+        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
+    except HoraValidacionFallida as e:
+        raise HoraDesactualizada(info_device["nombre_modelo"], info_device["punto_marcacion"], info_device["ip"])
     except Exception as e:
-        pass
+        raise e
+    finally:
+        if conn:
+            finalizar_conexion(conn)
+
     return

@@ -23,7 +23,7 @@ from utils import logging
 
 file_lock = threading.Lock()
 
-def cargar_desde_archivo(filePath):
+def cargar_desde_archivo(file_path):
     '''
     Carga el contenido desde un archivo de texto.
 
@@ -37,7 +37,7 @@ def cargar_desde_archivo(filePath):
 
     content = []
     try:
-        with open(filePath, 'r') as file:
+        with open(file_path, 'r') as file:
             content = [line.strip() for line in file.readlines()] # Elimina los saltos de línea
     except CargaArchivoFallida as e:
         raise(e)
@@ -45,16 +45,16 @@ def cargar_desde_archivo(filePath):
 
 def crear_carpeta_y_devolver_ruta(*args):
     # Directorio base donde se almacenarán las carpetas con la IP
-    directorioActual = os.path.abspath('.')
-    rutaDestino = directorioActual
+    directorio_actual = os.path.abspath('.')
+    ruta_destino = directorio_actual
     
     for index, carpeta in enumerate(args, start=1):
-        rutaDestino = os.path.join(rutaDestino, carpeta.lower())
-        if not os.path.exists(rutaDestino):
-            os.makedirs(rutaDestino)
-            logging.debug(f'Se ha creado la carpeta {carpeta} en la ruta {rutaDestino}')
+        ruta_destino = os.path.join(ruta_destino, carpeta.lower())
+        if not os.path.exists(ruta_destino):
+            os.makedirs(ruta_destino)
+            logging.debug(f'Se ha creado la carpeta {carpeta} en la ruta {ruta_destino}')
     
-    return rutaDestino
+    return ruta_destino
 
 def guardar_marcaciones_en_archivo(attendances, file):
     file_lock.acquire()

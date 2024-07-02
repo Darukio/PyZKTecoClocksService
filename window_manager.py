@@ -1,3 +1,22 @@
+"""
+    PyZKTecoClocks: GUI for managing ZKTeco clocks, enabling clock 
+    time synchronization and attendance data retrieval.
+    Copyright (C) 2024  Paulo Sebastian Spaciuk (Darukio)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
 import sys
 from PyQt5.QtWidgets import QApplication, QDialog, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QSpacerItem, QSizePolicy, QHeaderView, QLabel
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -12,6 +31,7 @@ class PingThread(QThread):
         device_status = ping_devices()
         self.ping_updated.emit(device_status)
 
+
 class DeviceStatusDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -19,9 +39,9 @@ class DeviceStatusDialog(QDialog):
         self.setMinimumSize(600, 400)  # Tamaño mínimo recomendado
         self.ping_thread = PingThread()
         self.ping_thread.ping_updated.connect(self.update_table)
-        self.initUI()
+        self.init_ui()
 
-    def initUI(self):
+    def init_ui(self):
         layout = QVBoxLayout(self)
 
         self.table_widget = QTableWidget()
@@ -65,8 +85,8 @@ class DeviceStatusDialog(QDialog):
             self.table_widget.setItem(row, 0, QTableWidgetItem(ip))  # IP
 
             # Resto de la información del dispositivo
-            self.table_widget.setItem(row, 1, QTableWidgetItem(device_info["puntoMarcacion"]))
-            self.table_widget.setItem(row, 2, QTableWidgetItem(device_info["nombreDistrito"]))
+            self.table_widget.setItem(row, 1, QTableWidgetItem(device_info["punto_marcacion"]))
+            self.table_widget.setItem(row, 2, QTableWidgetItem(device_info["nombre_distrito"]))
             self.table_widget.setItem(row, 3, QTableWidgetItem(device_info["id"]))
 
             # Estado

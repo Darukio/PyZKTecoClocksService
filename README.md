@@ -37,19 +37,19 @@ python main.py
 
 -   Con schedule.txt se configura el horario de ejecución de la tarea "gestionar_marcaciones_dispositivos"
 -   Con info_devices.txt se configuran los dispositivos que el programa va a iterar para la ejecución de las tareas de "actualizar_hora_dispositivo" o "gestionar_marcaciones_dispositivos". El archivo .txt posee el siguiente formato:
-DISTRITO - MODELO - PUNTO DE MARCACIÓN - IP - Booleano de activación del dispositivo (True or False)
-Si se configura el booleano en True, el dispositivo se incluirá en la actualización de horas u obtención de marcaciones. Sino, no
+    DISTRITO - MODELO - PUNTO DE MARCACIÓN - IP - Booleano de activación del dispositivo (True or False)
+    Si se configura el booleano en True, el dispositivo se incluirá en la actualización de horas u obtención de marcaciones. Sino, no
 
 ### Generados por el programa
 
 -   En requirements.txt se encuentran las dependencias necesarias para la ejecución del proyecto
 -   attendances_file.txt es un archivo global en donde se guardan todas las marcaciones, independiente del distrito, modelo o ip del dispositivo
 -   ip_date_file.cro es un archivo donde se guardan todas las marcaciones de un dispositivo (según ip) y fecha de marcación. Se encuentra ubicado en devices/distrito/modelo-punto_de_marcación/. El formato del archivo es:
-Hora Error e ip
-09:14:27 Conexion fallida con 192.168.113.19
+    Hora Error e ip
+    09:14:27 Conexion fallida con 192.168.113.19
 -   errors_date.txt es un archivo donde se guardan todos los errores que surjan de los dispositivos. Se encuentra ubicado en devices/errors/. El formato del archivo es:
-Legajo Fecha Hora Status Punch
-24 22/03/2024 10:41 1 0
+    Legajo Fecha Hora Status Punch
+    24 22/03/2024 10:41 1 0
 
 #### Logs
 
@@ -61,4 +61,4 @@ Legajo Fecha Hora Status Punch
 
 -   devices/distrito/modelo-punto_de_marcación/ proporciona una jerarquía organizada para localizar fácilmente los diferentes distritos y, dentro de cada distrito, los diversos modelos según los puntos de marcación
 -   venv/ alberga el entorno virtual, un espacio aislado que contiene todos los paquetes y dependencias específicos del proyecto Python
--   resources/ contiene todos los recursos utilizados para 
+-   resources/ contiene todos los recursos utilizados para

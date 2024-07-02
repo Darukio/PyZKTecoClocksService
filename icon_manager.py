@@ -1,3 +1,22 @@
+"""
+    PyZKTecoClocks: GUI for managing ZKTeco clocks, enabling clock 
+    time synchronization and attendance data retrieval.
+    Copyright (C) 2024  Paulo Sebastian Spaciuk (Darukio)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
 import os
 import threading
 import time
@@ -214,7 +233,7 @@ class MainWindow(QMainWindow):
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
         try:
             tiempo_inicial = self.__iniciar_cronometro()  # Iniciar el cronómetro
-            cantidad_marcaciones = obtener_cantidad_marcaciones()  # Llamar a función para obtener cantidad de marcaciones por dispositivo (se asume que está definida en otro lugar)
+            cantidad_marcaciones = obtener_cantidad_marcaciones_dispositivos()  # Llamar a función para obtener cantidad de marcaciones por dispositivo (se asume que está definida en otro lugar)
             self.__finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
             cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])  # Formatear resultados como texto
             self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución

@@ -17,13 +17,13 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import threading
-import time
 from connection import *
+from errors import *
 from file_manager import *
-from errors import ConexionFallida
 from utils import logging
 import configparser
+import time
+import os
 
 # Para leer un archivo INI
 config = configparser.ConfigParser()
@@ -36,9 +36,9 @@ def organizar_info_dispositivos(line):
     if len(parts) == 6:
         # Retorna un objeto con atributos
         return {
-            "nombreDistrito": parts[0],
-            "nombreModelo": parts[1],
-            "puntoMarcacion": parts[2],
+            "nombre_distrito": parts[0],
+            "nombre_modelo": parts[1],
+            "punto_marcacion": parts[2],
             "ip": parts[3],
             "id": parts[4],
             "activo": parts[5]
@@ -49,84 +49,68 @@ def organizar_info_dispositivos(line):
 
 def obtener_info_dispositivos():
     # Obtiene la ubicación del archivo de texto
-    filePath = os.path.join(os.path.abspath('.'), 'info_devices.txt')
-    logging.debug(filePath)
+    file_path = os.path.join(os.path.abspath('.'), 'info_devices.txt')
+    logging.debug(file_path)
     # Obtiene la info de dispositivos de info_devices.txt
-    dataList = cargar_desde_archivo(filePath)
-    logging.debug(dataList)
-    infoDevices = []
+    data_list = cargar_desde_archivo(file_path)
+    logging.debug(data_list)
+    info_devices = []
     # Itera los distintos dispositivos
-    for data in dataList:
+    for data in data_list:
         # A la línea sin formatear, crea un objeto de dispositivo
         line = organizar_info_dispositivos(data)
         logging.debug(line)
         if line:
             # Anexa el dispositivo a la lista de dispositivos
-            infoDevices.append(line)
-        logging.debug(infoDevices)
-    return infoDevices
-
-def reintentar_conexion(infoDevice):
-    config.read('config.ini')
-    intentos_maximos = int(config['Network_config']['retry_connection'])
-    conn = None
-    logging.info(f'Retrying connection to device {infoDevice["ip"]}...')
-    intentos = 0
-    t_inicio_reintento_total = time.time()
-    while intentos < intentos_maximos:  # Intenta conectar hasta 3 veces
-        try:
-            t_inicio_reintento = time.time()
-            conn = conectar(infoDevice['ip'], port=4370)
-            return conn
-        except Exception as e:
-            logging.warning(f'Failed to connect to device {infoDevice['ip']}. Retrying...')
-            intentos += 1
-        finally:
-            time.sleep(1)
-            t_reintento = finalizar_cronometro(t_inicio_reintento)
-            logging.debug(f'Tiempo de reintento {intentos} de {infoDevice["ip"]}: {t_reintento}')
-            logging.debug(conn)
-            if conn or intentos == intentos_maximos:
-                t_reintento_total = finalizar_cronometro(t_inicio_reintento_total)
-                logging.debug(f'Tiempo total de reintento de {infoDevice["ip"]}: {t_reintento_total}')
-    logging.error(f'Unable to connect to device {infoDevice['ip']} after {intentos} attempts.')
-    raise ConexionFallida(infoDevice['nombreModelo'], infoDevice['puntoMarcacion'], infoDevice['ip'])
-
-def finalizar_cronometro(tiempo_inicial):
-    tiempo_final = time.time()
-    return tiempo_final-tiempo_inicial
+            info_devices.append(line)
+        logging.debug(info_devices)
+    return info_devices
 
 def ping_devices():
-    infoDevices = None
+    info_devices = None
     try:
         # Obtiene todos los dispositivos en una lista formateada
-        infoDevices = obtener_info_dispositivos()
-        logging.debug(infoDevices)
+        info_devices = obtener_info_dispositivos()
+        logging.debug(info_devices)
     except Exception as e:
         logging.error(e)
 
     results = {}
-    if infoDevices:
+    if info_devices:
         # Itera a través de los dispositivos
-        for infoDevice in infoDevices:
+        for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
-            if eval(infoDevice["activo"]):
+            if eval(info_device["activo"]):
                 conn = None
                 status = None
                     
                 try:
-                    conn = conectar(infoDevice["ip"], port=4370)
+                    conn = conectar(info_device["ip"], port=4370)
                     status = "Conexión exitosa"
                     finalizar_conexion(conn)
                 except Exception as e:
                     status = "Conexión fallida"
-
-                # Guardar la información en results
-                results[infoDevice["ip"]] = {
-                    "puntoMarcacion": infoDevice["puntoMarcacion"],
-                    "nombreDistrito": infoDevice["nombreDistrito"],
-                    "id": infoDevice["id"],
-                    "status": status
-                }
+                    # Guardar la información en results
+                    results[info_device["ip"]] = {
+                        "punto_marcacion": info_device["punto_marcacion"],
+                        "nombre_distrito": info_device["nombre_distrito"],
+                        "id": info_device["id"],
+                        "status": status
+                    }
 
     return results
+
+def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
+    config.read('config.ini')
+    intentos_maximos = int(config['Network_config']['retry_connection'])
+    result = None
+
+    for _ in range(intentos_maximos):
+        try:
+            result = op(*args, **kwargs)
+            logging.debug(result)
+            return result
+        except Exception as e:
+            logging.warning(f"Failed attempt {_ + 1} of {intentos_maximos} for operation {op.__name__}: {e}")
+            if _ == intentos_maximos:
+                raise e

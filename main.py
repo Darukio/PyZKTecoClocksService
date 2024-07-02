@@ -17,6 +17,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import eventlet
+eventlet.monkey_patch()
 from PyQt5.QtWidgets import QApplication
 from icon_manager import MainWindow
 from utils import logging

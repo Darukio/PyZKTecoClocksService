@@ -24,35 +24,35 @@ import winreg as reg
 from utils import logging
 
 def create_service():
-    # Obtener la ruta al ejecutable de Python en el entorno virtual
+    # obtener la ruta al ejecutable de Python en el entorno virtual
     venv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv")
     venv_python = os.path.join(venv_path, "Scripts", "python.exe") if sys.platform == "win32" else os.path.join(venv_path, "bin", "python")
 
-    # Obtener la ruta completa del script service.py
+    # obtener la ruta completa del script service.py
     main_script_path = os.path.abspath("service.py")
 
-    # Instalar el servicio de Windows
+    # instalar el servicio de Windows
     create_service_cmd = [venv_python, main_script_path, "install"]
     subprocess.run(create_service_cmd, check=True)
 
 def configure_startup():
-    # Obtener la ruta completa del ejecutable .exe
+    # obtener la ruta completa del ejecutable .exe
     exe_path = os.path.join("dist", "main.exe")
     key = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
     reg_key = reg.OpenKey(reg.HKEY_CURRENT_USER, key, 0, reg.KEY_SET_VALUE)
     if os.path.exists(exe_path):
-        # Agregar el script como servicio de Windows
+        # agregar el script como servicio de Windows
         try:
-            reg.SetValueEx(reg_key, "GestorRelojAsistencias", 0, reg.REG_SZ, exe_path)
+            reg.SetValueEx(reg_key, "gestor_reloj_asistencias", 0, reg.REG_SZ, exe_path)
         except Exception as e:
             logging.error(f"Error al configurar el inicio con Windows: {e}")
     else:
-        # Agregar el script Python como servicio de Windows
-        pyScriptPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
+        # agregar el script Python como servicio de Windows
+        py_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
         venv_activate = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv", "Scripts", "activate")
-        startup_command = f'"{sys.executable}" "{pyScriptPath}"'
+        startup_command = f'"{sys.executable}" "{py_script_path}"'
         try:
-            reg.SetValueEx(reg_key, "ActivarEntornoVirtual && GestorRelojAsistencias", 0, reg.REG_SZ, f'"{venv_activate}" ; "{startup_command}"')
+            reg.SetValueEx(reg_key, "activar_entorno_virtual && gestor_reloj_asistencias", 0, reg.REG_SZ, f'"{venv_activate}" ; "{startup_command}"')
         except Exception as e:
             logging.error(f"Error al configurar el inicio con Windows: {e}")
     reg.CloseKey(reg_key)
@@ -62,7 +62,7 @@ def check_startup_configuration():
     key = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
     try:
         reg_key = reg.OpenKey(reg.HKEY_CURRENT_USER, key, 0, reg.KEY_READ)
-        value, _ = reg.QueryValueEx(reg_key, "GestorRelojAsistencias")
+        value, _ = reg.QueryValueEx(reg_key, "gestor_reloj_asistencias")
         reg.CloseKey(reg_key)
         if value:
             logging.debug("La configuración de inicio con Windows está correctamente establecida.")
@@ -72,10 +72,10 @@ def check_startup_configuration():
         logging.error("La clave de registro no se encuentra, por lo que la configuración de inicio con Windows no está establecida.")
 
 if __name__ == "__main__":
-    # Crear el servicio
+    # crear el servicio
     create_service()
 
-    # Configurar el inicio con Windows
+    # configurar el inicio con Windows
     # configure_startup()
 
     # check_startup_configuration()
