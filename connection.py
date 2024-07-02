@@ -20,7 +20,7 @@
 from datetime import datetime
 from utils import logging
 from errors import *
-from zk import ZK
+from zk import ZK, ZK_helper
 import configparser
 
 # Para leer un archivo INI
@@ -42,6 +42,14 @@ def conectar(ip, port):
     except Exception as e:
         raise IntentoConexionFallida from e
     return conn
+
+def ping_device(ip, port):
+    try:
+        zk_helper = ZK_helper(ip, port, 5)
+        return zk_helper.test_ping()
+    except Exception as e:
+        logging.error(e)
+        return False
     
 def finalizar_conexion(conn):
     #logging.info('Enabling device...')
@@ -53,19 +61,23 @@ def finalizar_conexion(conn):
         raise e
     
 def actualizar_hora(conn):
+    ip = None
     try:
+        ip = conn.get_network_params()["ip"]
         zktime = conn.get_time()
-        logging.debug(f'{conn.get_network_params()["ip"]} - Date and hour device: {zktime} - Date and hour machine: {datetime.today()}')
+        logging.debug(f'{ip} - Date and hour device: {zktime} - Date and hour machine: {datetime.today()}')
     except Exception as e:
         logging.error(e)
 
     try:
+        logging.debug(f'{ip} - Setting updated hour...')
         newtime = datetime.today()
         conn.set_time(newtime)
     except Exception as e:
-        raise e
+        raise IntentoConexionFallida from e
 
     try:
+        logging.debug(f'{ip} - Validating hour device...')
         validar_hora(zktime)
     except Exception as e:
         raise HoraValidacionFallida from e
@@ -85,9 +97,10 @@ def obtener_marcaciones(conn):
     attendances = []
     try:
         ip = conn.get_network_params()["ip"]
-        records = conn.records
         logging.info(f'{ip} - Getting attendances...')
         attendances = conn.get_attendance()
+        records = conn.records
+        logging.debug(f'{ip} - Length of attendances from device: {records}, Length of attendances: {len(attendances)}')
         if records != len(attendances):
             raise Exception('Records mismatch')
         else:
@@ -100,7 +113,6 @@ def obtener_marcaciones(conn):
                 except Exception as e:
                     logging.error(f'{ip} - Can\'t clear attendances')
                     raise e
-            logging.debug(f'{ip} - Length of attendances from device: {records}, Length of attendances: {len(attendances)}')
             return attendances
     except Exception as e:
         raise IntentoConexionFallida from e

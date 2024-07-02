@@ -22,6 +22,10 @@ from device_manager import *
 from errors import *
 from utils import logging
 import eventlet
+import configparser
+
+# Para leer un archivo INI
+config = configparser.ConfigParser()
 
 def actualizar_hora_dispositivos():
     info_devices = []
@@ -33,9 +37,10 @@ def actualizar_hora_dispositivos():
 
     if info_devices:
         gt = []
-
+        config.read('config.ini')
+        coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         # Crea un pool de green threads
-        pool = eventlet.GreenPool(10)
+        pool = eventlet.GreenPool(coroutines_pool_max_size)
         
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
@@ -54,10 +59,10 @@ def actualizar_hora_dispositivo(info_device):
     conn = None
 
     try:
-        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370))
+        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370,))
 
         logging.info(f'Processing IP: {info_device["ip"]}')
-        reintentar_operacion_de_red(actualizar_hora, conn)
+        reintentar_operacion_de_red(actualizar_hora, args=(conn,))
     except IntentoConexionFallida as e:
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except HoraValidacionFallida as e:

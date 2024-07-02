@@ -1,5 +1,5 @@
+git+https://github.com/Darukio/pyzk.git
 eventlet
-pyzk
 pillow
 pyinstaller
 pyqt5

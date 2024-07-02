@@ -76,6 +76,7 @@ def ping_devices():
         logging.error(e)
 
     results = {}
+    failed_connections = {}
     if info_devices:
         # Itera a través de los dispositivos
         for info_device in info_devices:
@@ -83,22 +84,25 @@ def ping_devices():
             if eval(info_device["activo"]):
                 conn = None
                 status = None
-                    
-                try:
-                    conn = conectar(info_device["ip"], port=4370)
+                
+                result_ping = ping_device(info_device["ip"], 4370)
+                if result_ping:
                     status = "Conexión exitosa"
-                    finalizar_conexion(conn)
-                except Exception as e:
-                    status = "Conexión fallida"
-                    # Guardar la información en results
-                    results[info_device["ip"]] = {
-                        "punto_marcacion": info_device["punto_marcacion"],
-                        "nombre_distrito": info_device["nombre_distrito"],
-                        "id": info_device["id"],
-                        "status": status
-                    }
+                else:
+                    status = "Conexión fallida"                    
+                
+                # Guardar la información en results
+                results[info_device["ip"]] = {
+                    "punto_marcacion": info_device["punto_marcacion"],
+                    "nombre_distrito": info_device["nombre_distrito"],
+                    "id": info_device["id"],
+                    "status": status
+                }
+                logging.debug(results[info_device["ip"]])
 
-    return results
+        failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
+
+    return failed_connections
 
 def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
     config.read('config.ini')
@@ -108,9 +112,8 @@ def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
     for _ in range(intentos_maximos):
         try:
             result = op(*args, **kwargs)
-            logging.debug(result)
             return result
         except Exception as e:
-            logging.warning(f"Failed attempt {_ + 1} of {intentos_maximos} for operation {op.__name__}: {e}")
-            if _ == intentos_maximos:
+            logging.warning(f"Failed attempt {_ + 1} of {intentos_maximos} for operation {op.__name__}: {e.__cause__}")
+            if _ + 1 == intentos_maximos:
                 raise e

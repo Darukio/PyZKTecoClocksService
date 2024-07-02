@@ -19,6 +19,7 @@
 
 from connection import *
 from device_manager import *
+from hour_manager import actualizar_hora_dispositivo
 from file_manager import *
 from datetime import datetime
 from errors import *
@@ -40,9 +41,10 @@ def gestionar_marcaciones_dispositivos():
         
     if info_devices:
         gt = []
-
+        config.read('config.ini')
+        coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         # Crea un pool de green threads
-        pool = eventlet.GreenPool(10)
+        pool = eventlet.GreenPool(coroutines_pool_max_size)
         
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
@@ -61,10 +63,10 @@ def gestionar_marcaciones_dispositivo(info_device):
     conn = None
 
     try:
-        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370))
+        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370,))
 
         logging.info(f'Processing IP: {info_device["ip"]}')
-        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(conn))
+        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(conn,))
         attendances = format_attendances(attendances, info_device["id"])
         logging.info(f'{info_device["ip"]} - Attendances: {attendances}')
         
@@ -126,15 +128,16 @@ def obtener_cantidad_marcaciones_dispositivos():
         cantidad_marcaciones = {}
         info_devices_active = []
         gt = []
-
+        config.read('config.ini')
+        coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         # Crea un pool de green threads
-        pool = eventlet.GreenPool(10)
+        pool = eventlet.GreenPool(coroutines_pool_max_size)
         
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
             if eval(info_device["activo"]):
                 # Lanza una corutina para cada dispositivo activo
-                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device))
+                gt.append(pool.spawn(obtener_cantidad_marcaciones_dispositivo, info_device))
                 info_devices_active.append(info_device)
 
         # Espera a que todas las corutinas en el pool hayan terminado
@@ -150,11 +153,12 @@ def obtener_cantidad_marcaciones_dispositivo(info_device):
     conn = None
                     
     try:
-        conn = reintentar_operacion_de_red(conectar, args=(info_device["ip"], 4370))
+        conn = reintentar_operacion_de_red(conectar, args=(info_device["ip"], 4370,))
 
         logging.info(f'Processing IP: {info_device["ip"]}')
-        reintentar_operacion_de_red(conn.get_attendance())
-        return reintentar_operacion_de_red(conn.records)
+        reintentar_operacion_de_red(conn.get_attendance)
+        logging.debug(f'IP: {info_device["ip"]} - Records: {conn.records}')
+        return conn.records
     except IntentoConexionFallida as e:
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip']) from e
     except Exception as e:
