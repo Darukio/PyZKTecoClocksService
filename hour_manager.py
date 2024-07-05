@@ -55,22 +55,16 @@ def actualizar_hora_dispositivos():
             except Exception as e:
                 logging.error(e)
 
+        print('TERMINE HORA!')
+        logging.debug('TERMINE HORA!')
+
 def actualizar_hora_dispositivo(info_device):
-    conn = None
-
     try:
-        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370,))
-
-        logging.info(f'Processing IP: {info_device["ip"]}')
-        reintentar_operacion_de_red(actualizar_hora, args=(conn,))
+        reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370,))
     except IntentoConexionFallida as e:
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except HoraValidacionFallida as e:
         raise HoraDesactualizada(info_device["nombre_modelo"], info_device["punto_marcacion"], info_device["ip"])
     except Exception as e:
         raise e
-    finally:
-        if conn:
-            finalizar_conexion(conn)
-
     return

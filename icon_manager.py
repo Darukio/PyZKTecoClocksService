@@ -154,6 +154,7 @@ class MainWindow(QMainWindow):
         """
         tiempo_final = self.__iniciar_cronometro()  # Obtener el tiempo final
         tiempo_transcurrido = tiempo_final - tiempo_inicial  # Calcular el tiempo transcurrido
+        logging.debug(f'La tarea finalizo en {tiempo_transcurrido:.2f} segundos')
         self.tray_icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)  # Mostrar notificación con el tiempo transcurrido
 
     @pyqtSlot()

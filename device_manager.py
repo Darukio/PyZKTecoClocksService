@@ -24,6 +24,7 @@ from utils import logging
 import configparser
 import time
 import os
+import eventlet
 
 # Para leer un archivo INI
 config = configparser.ConfigParser()
@@ -108,12 +109,24 @@ def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
     config.read('config.ini')
     intentos_maximos = int(config['Network_config']['retry_connection'])
     result = None
+    conn = None
 
     for _ in range(intentos_maximos):
         try:
-            result = op(*args, **kwargs)
-            return result
-        except Exception as e:
+            if conn is None:
+                conn = conectar(*args, **kwargs)
+            result = op(conn)
+            finalizar_conexion(conn)
+            break
+        except HoraValidacionFallida as e:
+            raise e
+        except IntentoConexionFallida as e:
+            conn = None
             logging.warning(f"Failed attempt {_ + 1} of {intentos_maximos} for operation {op.__name__}: {e.__cause__}")
+            if result:
+                break
             if _ + 1 == intentos_maximos:
                 raise e
+            eventlet.sleep(0)
+    
+    return result

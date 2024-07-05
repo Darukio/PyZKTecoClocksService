@@ -58,15 +58,13 @@ def gestionar_marcaciones_dispositivos():
                 g.wait()
             except Exception as e:
                 logging.error(e)
+        
+        print('TERMINE MARCACIONES!')
+        logging.debug('TERMINE MARCACIONES!')
 
 def gestionar_marcaciones_dispositivo(info_device):
-    conn = None
-
     try:
-        conn = reintentar_operacion_de_red(conectar, args=(info_device['ip'], 4370,))
-
-        logging.info(f'Processing IP: {info_device["ip"]}')
-        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(conn,))
+        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370,))
         attendances = format_attendances(attendances, info_device["id"])
         logging.info(f'{info_device["ip"]} - Attendances: {attendances}')
         
@@ -76,10 +74,7 @@ def gestionar_marcaciones_dispositivo(info_device):
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except Exception as e:
         raise e
-    finally:
-        if conn:
-            finalizar_conexion(conn)
-    
+
     actualizar_hora_dispositivo(info_device)
 
     return
@@ -147,22 +142,19 @@ def obtener_cantidad_marcaciones_dispositivos():
             except Exception as e:
                 cantidad_marcaciones[info_device_active["ip"]] = 'Conexión fallida'
 
+        print('TERMINE CANT MARCACIONES!')
+        logging.debug('TERMINE CANT MARCACIONES!')
+
     return cantidad_marcaciones
 
 def obtener_cantidad_marcaciones_dispositivo(info_device):
-    conn = None
-                    
     try:
-        conn = reintentar_operacion_de_red(conectar, args=(info_device["ip"], 4370,))
-
-        logging.info(f'Processing IP: {info_device["ip"]}')
-        reintentar_operacion_de_red(conn.get_attendance)
-        logging.debug(f'IP: {info_device["ip"]} - Records: {conn.records}')
-        return conn.records
+        records = reintentar_operacion_de_red(obtener_cantidad_marcaciones, args=(info_device["ip"], 4370,))
+        logging.debug(f'IP: {info_device["ip"]} - Records: {records}')
+        return records
     except IntentoConexionFallida as e:
-        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip']) from e
+        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except Exception as e:
         raise e
-    finally:
-        if conn:
-            finalizar_conexion(conn)
+
+    return
