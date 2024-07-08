@@ -71,7 +71,7 @@ def actualizar_hora(conn):
         logging.debug(f'{ip} - Date and hour device: {zktime} - Date and hour machine: {datetime.today()}')
         eventlet.sleep(0)
     except Exception as e:
-        logging.error(e)
+        raise IntentoConexionFallida from e
 
     try:
         logging.debug(f'{ip} - Setting updated hour...')

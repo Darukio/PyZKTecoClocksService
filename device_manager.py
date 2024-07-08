@@ -76,30 +76,39 @@ def ping_devices():
     except Exception as e:
         logging.error(e)
 
-    results = {}
-    failed_connections = {}
     if info_devices:
+        results = {}
+        failed_connections = {}
+        config.read('config.ini')
+        coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
+        
+        # Crear un pool de green threads
+        pool = eventlet.GreenPool(coroutines_pool_max_size)
+
+        gt = []
+        info_devices_active = []
         # Itera a través de los dispositivos
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
             if eval(info_device["activo"]):
-                conn = None
-                status = None
+                gt.append(pool.spawn(ping_device, info_device["ip"], 4370))
+                info_devices_active.append(info_device)
+
+        for info_device_active, g in zip(info_devices_active, gt):
+            response = g.wait()
+            if response:
+                status = "Conexión exitosa"
+            else:
+                status = "Conexión fallida"
                 
-                result_ping = ping_device(info_device["ip"], 4370)
-                if result_ping:
-                    status = "Conexión exitosa"
-                else:
-                    status = "Conexión fallida"                    
-                
-                # Guardar la información en results
-                results[info_device["ip"]] = {
-                    "punto_marcacion": info_device["punto_marcacion"],
-                    "nombre_distrito": info_device["nombre_distrito"],
-                    "id": info_device["id"],
-                    "status": status
-                }
-                logging.debug(results[info_device["ip"]])
+            # Guardar la información en results
+            results[info_device_active["ip"]] = {
+                "punto_marcacion": info_device_active["punto_marcacion"],
+                "nombre_distrito": info_device_active["nombre_distrito"],
+                "id": info_device_active["id"],
+                "status": status
+            }
+            logging.debug(results[info_device_active["ip"]])
 
         failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
 
@@ -113,8 +122,10 @@ def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
 
     for _ in range(intentos_maximos):
         try:
+            logging.debug(f'{args} CONNECTING!')
             if conn is None:
                 conn = conectar(*args, **kwargs)
+            logging.debug(f'{args} OPERATION!')
             result = op(conn)
             finalizar_conexion(conn)
             break

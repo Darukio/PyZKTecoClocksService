@@ -45,6 +45,7 @@ def actualizar_hora_dispositivos():
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
             if eval(info_device["activo"]):
+                logging.debug(info_device)
                 # Lanza una corutina para cada dispositivo activo
                 gt.append(pool.spawn(actualizar_hora_dispositivo, info_device))
         
