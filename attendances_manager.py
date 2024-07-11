@@ -38,29 +38,47 @@ def gestionar_marcaciones_dispositivos():
         info_devices = obtener_info_dispositivos()
     except Exception as e:
         logging.error(e)
-        
+    
+    failed_connections = {}
     if info_devices:
-        gt = []
         config.read('config.ini')
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         # Crea un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
         
+        results = {}
+        gt = []
+        info_devices_active = []
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
             if eval(info_device["activo"]):
                 # Lanza una corutina para cada dispositivo activo
                 gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device))
-        
+                info_devices_active.append(info_device)
+
         # Espera a que todas las corutinas en el pool hayan terminado
-        for g in gt:
+        for info_device_active, g in zip(info_devices_active, gt):
             try:
                 g.wait()
+                status = 'Marcaciones obtenidas'
             except Exception as e:
                 logging.error(e)
-        
+                status = 'Conexión fallida'
+
+            # Guardar la información en results
+            results[info_device_active["ip"]] = {
+                "punto_marcacion": info_device_active["punto_marcacion"],
+                "nombre_distrito": info_device_active["nombre_distrito"],
+                "id": info_device_active["id"],
+                "status": status
+            }
+            logging.debug(results[info_device_active["ip"]])
+
+        #failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
         print('TERMINE MARCACIONES!')
         logging.debug('TERMINE MARCACIONES!')
+
+    return results
 
 def gestionar_marcaciones_dispositivo(info_device):
     try:
@@ -117,10 +135,9 @@ def obtener_cantidad_marcaciones_dispositivos():
     except Exception as e:
         logging.error(e)
 
-    cantidad_marcaciones = {}
+    results = {}
 
     if info_devices:
-        cantidad_marcaciones = {}
         info_devices_active = []
         gt = []
         config.read('config.ini')
@@ -138,14 +155,24 @@ def obtener_cantidad_marcaciones_dispositivos():
         # Espera a que todas las corutinas en el pool hayan terminado
         for info_device_active, g in zip(info_devices_active, gt):
             try:
-                cantidad_marcaciones[info_device_active["ip"]] = g.wait()
+                cant_marcaciones = g.wait()
             except Exception as e:
-                cantidad_marcaciones[info_device_active["ip"]] = 'Conexión fallida'
+                cant_marcaciones = 'Conexión fallida'
+
+            logging.debug(f'{info_device_active['ip']} - {cant_marcaciones}')
+
+            # Guardar la información en results
+            results[info_device_active["ip"]] = {
+                "punto_marcacion": info_device_active["punto_marcacion"],
+                "nombre_distrito": info_device_active["nombre_distrito"],
+                "id": info_device_active["id"],
+                "cant_marcaciones": str(cant_marcaciones)
+            }
 
         print('TERMINE CANT MARCACIONES!')
         logging.debug('TERMINE CANT MARCACIONES!')
 
-    return cantidad_marcaciones
+    return results
 
 def obtener_cantidad_marcaciones_dispositivo(info_device):
     try:

@@ -76,15 +76,15 @@ def ping_devices():
     except Exception as e:
         logging.error(e)
 
+    failed_connections = {}
     if info_devices:
-        results = {}
-        failed_connections = {}
         config.read('config.ini')
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         
         # Crear un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
 
+        results = {}
         gt = []
         info_devices_active = []
         # Itera a través de los dispositivos

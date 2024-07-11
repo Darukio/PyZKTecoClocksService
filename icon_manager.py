@@ -29,7 +29,7 @@ from attendances_manager import *
 from hour_manager import *
 from file_manager import cargar_desde_archivo
 from utils import logging
-from window_manager import DeviceStatusDialog
+from window_manager import DeviceStatusDialog, DeviceAttendancesCountDialog, DeviceAttendancesDialog
 
 # Para leer un archivo INI
 config = configparser.ConfigParser()
@@ -43,7 +43,6 @@ class MainWindow(QMainWindow):
         self.checked = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
 
         self.tray_icon = None  # Variable para almacenar el QSystemTrayIcon
-        self.device_status_dialog = None
         self.__init_ui()  # Inicialización de la interfaz de usuario
         configurar_schedule()  # Configuración de las tareas programadas
 
@@ -53,8 +52,7 @@ class MainWindow(QMainWindow):
 
         # Crear y configurar el ícono en la bandeja del sistema
         self.color_icon = "red"  # Color inicial del ícono
-        self.__create_tray_icon()  # Creación del ícono en la bandeja del sistema
-        self.device_status_dialog = DeviceStatusDialog()  # Obtener estado de los dispositivos
+        self.__create_tray_icon()  # Creación del ícono en la bandeja del sistema        
 
     def __create_tray_icon(self):
         '''
@@ -64,7 +62,7 @@ class MainWindow(QMainWindow):
 
         try:
             self.tray_icon = QSystemTrayIcon(QIcon(file_path), self)  # Creación del QSystemTrayIcon con el ícono y ventana principal asociada
-            self.tray_icon.setToolTip("GestorRelojAsistencias")  # Texto al colocar el cursor sobre el ícono
+            self.tray_icon.setToolTip("Gestor Reloj de Asistencias")  # Texto al colocar el cursor sobre el ícono
 
             # Crear un menú contextual personalizado
             menu = QMenu()
@@ -136,7 +134,7 @@ class MainWindow(QMainWindow):
         file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono con el nuevo color
         icon.setIcon(QIcon(file_path))  # Establecer el nuevo ícono con el color especificado
 
-    def __iniciar_cronometro(self):
+    def iniciar_cronometro(self):
         """
         Iniciar el cronómetro y devolver el tiempo actual.
 
@@ -145,14 +143,14 @@ class MainWindow(QMainWindow):
         """
         return time.time()  # Devolver el tiempo actual en segundos
 
-    def __finalizar_cronometro(self, tiempo_inicial):
+    def finalizar_cronometro(self, tiempo_inicial):
         """
         Finalizar el cronómetro, calcular el tiempo transcurrido y mostrar una notificación.
 
         Args:
             tiempo_inicial (float): Tiempo inicial obtenido al iniciar el cronómetro.
         """
-        tiempo_final = self.__iniciar_cronometro()  # Obtener el tiempo final
+        tiempo_final = self.iniciar_cronometro()  # Obtener el tiempo final
         tiempo_transcurrido = tiempo_final - tiempo_inicial  # Calcular el tiempo transcurrido
         logging.debug(f'La tarea finalizo en {tiempo_transcurrido:.2f} segundos')
         self.tray_icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)  # Mostrar notificación con el tiempo transcurrido
@@ -196,7 +194,8 @@ class MainWindow(QMainWindow):
         """
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
         try:
-            self.device_status_dialog.exec_()
+            device_status_dialog = DeviceStatusDialog()  # Obtener estado de los dispositivos
+            device_status_dialog.exec_()
             self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
             # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
             if self.tray_icon:
@@ -210,9 +209,9 @@ class MainWindow(QMainWindow):
         Opción para actualizar la hora en los dispositivos.
         """
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
-        tiempo_inicial = self.__iniciar_cronometro()  # Iniciar el cronómetro
+        tiempo_inicial = self.iniciar_cronometro()  # Iniciar el cronómetro
         actualizar_hora_dispositivos()  # Llamar a función para actualizar hora en dispositivos (se asume que está definida en otro lugar)
-        self.__finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
+        self.finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
         self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
 
     @pyqtSlot()
@@ -221,10 +220,15 @@ class MainWindow(QMainWindow):
         Opción para obtener las marcaciones de los dispositivos.
         """
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
-        tiempo_inicial = self.__iniciar_cronometro()  # Iniciar el cronómetro
-        gestionar_marcaciones_dispositivos()  # Llamar a función para gestionar marcaciones de dispositivos (se asume que está definida en otro lugar)
-        self.__finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
-        self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+        try:
+            device_attendances_dialog = DeviceAttendancesDialog()
+            device_attendances_dialog.exec_()
+            self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+            # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
+            if self.tray_icon:
+                self.tray_icon.contextMenu().setVisible(True)
+        except Exception as e:
+            logging.error(f"Error al obtener marcaciones: {e}")  # Registro de error si falla la operación
 
     @pyqtSlot()
     def __opt_show_attendances_count(self):
@@ -233,12 +237,12 @@ class MainWindow(QMainWindow):
         """
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
         try:
-            tiempo_inicial = self.__iniciar_cronometro()  # Iniciar el cronómetro
-            cantidad_marcaciones = obtener_cantidad_marcaciones_dispositivos()  # Llamar a función para obtener cantidad de marcaciones por dispositivo (se asume que está definida en otro lugar)
-            self.__finalizar_cronometro(tiempo_inicial)  # Finalizar el cronómetro y mostrar notificación
-            cantidad_marcaciones_str = "\n".join([f"{ip}: {cantidad}" for ip, cantidad in cantidad_marcaciones.items()])  # Formatear resultados como texto
+            device_attendances_count_dialog = DeviceAttendancesCountDialog()
+            device_attendances_count_dialog.exec_()
             self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
-            self.__show_message("Marcaciones por dispositivo", cantidad_marcaciones_str)  # Mostrar cuadro de diálogo con información
+            # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
+            if self.tray_icon:
+                self.tray_icon.contextMenu().setVisible(True)
         except Exception as e:
             logging.error(f"Error al mostrar cantidad de marcaciones: {e}")  # Registro de error si falla la operación
 

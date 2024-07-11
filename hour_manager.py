@@ -52,9 +52,11 @@ def actualizar_hora_dispositivos():
         # Espera a que todas las corutinas en el pool hayan terminado
         for g in gt:
             try:
-                g.wait()
+                info_device = g.wait()
+                logging.debug(f'{info_device} hola')
             except Exception as e:
-                logging.error(e)
+                pass
+                #logging.error(e)
 
         print('TERMINE HORA!')
         logging.debug('TERMINE HORA!')
@@ -63,9 +65,21 @@ def actualizar_hora_dispositivo(info_device):
     try:
         reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370,))
     except IntentoConexionFallida as e:
-        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
+        try:
+            raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
+        except Exception as e:
+            logging.error(f'{info_device["ip"]} hola')
+            raise e
     except HoraValidacionFallida as e:
-        raise HoraDesactualizada(info_device["nombre_modelo"], info_device["punto_marcacion"], info_device["ip"])
+        try:
+            raise HoraDesactualizada(info_device["nombre_modelo"], info_device["punto_marcacion"], info_device["ip"])
+        except Exception as e:
+            logging.error(f'{info_device["ip"]} hola')
+            raise e
     except Exception as e:
-        raise e
-    return
+        try:
+            raise e
+        except Exception as e:
+            logging.error(f'{info_device["ip"]} hola')
+
+    return info_device["ip"]
