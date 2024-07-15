@@ -40,6 +40,7 @@ config.read('config.ini')  # Lectura del archivo de configuración config.ini
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        logging.debug('hola')
         self.is_running = False  # Variable para indicar si la aplicación está corriendo
         self.schedule_thread = None  # Hilo para ejecutar tareas programadas
         self.checked = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
@@ -60,7 +61,23 @@ class MainWindow(QMainWindow):
         '''
         Crear ícono en la bandeja del sistema con un menú contextual personalizado
         '''
+        logging.debug('mola')
+        import sys
+        logging.debug(f'SE EJECUTA DESDE EXE?: {getattr(sys, 'frozen', False)}')
+        logging.debug(f'EJECUTABLE: {os.path.dirname(sys.executable)}')
+        archivos = os.listdir(os.path.dirname(sys.executable))
+        logging.debug(archivos)
+        logging.debug(f'ARCHIVO: {os.path.dirname(os.path.abspath(__file__))}')
+        archivos = os.listdir(os.path.dirname(os.path.abspath(__file__)))
+        logging.debug(archivos)
+        logging.debug(f'ARCHIVO: {os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}')
+        archivos = os.listdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        logging.debug(archivos)
+        logging.debug(f'ARCHIVO: {os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))}')
+        archivos = os.listdir(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        logging.debug(archivos)
         file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "resources", "system_tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono
+        logging.debug('chau')
         logging.debug(file_path)
 
         try:

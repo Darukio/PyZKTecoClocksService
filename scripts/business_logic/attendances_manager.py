@@ -39,41 +39,34 @@ def gestionar_marcaciones_dispositivos(progress_callback=None):
     results = {}
 
     if info_devices:
-        completed_devices = 0
-        total_devices = len([d for d in info_devices if eval(d["activo"])])
         gt = []
         info_devices_active = []
         config.read('config.ini')
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
-        
-        for i in range(0, total_devices, coroutines_pool_max_size):
-            # Crea un pool de green threads
-            pool = eventlet.GreenPool(coroutines_pool_max_size)
-            info_devices_active = info_devices[i:i + coroutines_pool_max_size]
-            gt = [pool.spawn(gestionar_marcaciones_dispositivo, info_device) for info_device in info_devices_active]
 
-            for info_device_active, g in zip(info_devices_active, gt):
-                try:
-                    status = g.wait()
-                except Exception as e:
-                    logging.error(e)
-                    status = 'Conexión fallida'
-                
-                completed_devices += 1
-                progress = int((completed_devices / total_devices) * 100)
-                if progress_callback:
-                    progress_callback(progress)
+        # Crea un pool de green threads
+        pool = eventlet.GreenPool(coroutines_pool_max_size)
+        for info_device in info_devices:
+            if eval(info_device["activo"]):
+                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device))
+                info_devices_active.append(info_device)
 
-                # Guardar la información en results
-                results[info_device_active["ip"]] = {
-                    "punto_marcacion": info_device_active["punto_marcacion"],
-                    "nombre_distrito": info_device_active["nombre_distrito"],
-                    "id": info_device_active["id"],
-                    "status": status
-                }
-                logging.debug(results[info_device_active["ip"]])
+        for info_device_active, g in zip(info_devices_active, gt):
+            try:
+                g.wait()
+                status = 'Marcaciones obtenidas'
+            except Exception as e:
+                logging.error(e)
+                status = 'Conexión fallida'
 
-            logging.debug(f'Progreso: {completed_devices}/{total_devices} ({progress}%)')
+            # Guardar la información en results
+            results[info_device_active["ip"]] = {
+                "punto_marcacion": info_device_active["punto_marcacion"],
+                "nombre_distrito": info_device_active["nombre_distrito"],
+                "id": info_device_active["id"],
+                "status": status
+            }
+            logging.debug(results[info_device_active["ip"]])
 
         #failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
         print('TERMINE MARCACIONES!')
@@ -139,41 +132,33 @@ def obtener_cantidad_marcaciones_dispositivos(progress_callback=None):
     results = {}
 
     if info_devices:
-        completed_devices = 0
-        total_devices = len([d for d in info_devices if eval(d["activo"])])
         gt = []
         info_devices_active = []
         config.read('config.ini')
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         
-        for i in range(0, total_devices, coroutines_pool_max_size):
-            # Crea un pool de green threads
-            pool = eventlet.GreenPool(coroutines_pool_max_size)
-            info_devices_active = info_devices[i:i + coroutines_pool_max_size]
-            gt = [pool.spawn(obtener_cantidad_marcaciones_dispositivo, info_device) for info_device in info_devices_active]
+        # Crea un pool de green threads
+        pool = eventlet.GreenPool(coroutines_pool_max_size)
+        for info_device in info_devices:
+            if eval(info_device["activo"]):
+                gt.append(pool.spawn(obtener_cantidad_marcaciones_dispositivo, info_device))
+                info_devices_active.append(info_device)
 
-            for info_device_active, g in zip(info_devices_active, gt):
-                try:
-                    cant_marcaciones = g.wait()
-                except Exception as e:
-                    logging.error(e)
-                    cant_marcaciones = 'Conexión fallida'
-                
-                completed_devices += 1
-                progress = int((completed_devices / total_devices) * 100)
-                if progress_callback:
-                    progress_callback(progress)
-
-                # Guardar la información en results
-                results[info_device_active["ip"]] = {
-                    "punto_marcacion": info_device_active["punto_marcacion"],
-                    "nombre_distrito": info_device_active["nombre_distrito"],
-                    "id": info_device_active["id"],
-                    "cant_marcaciones": str(cant_marcaciones)
-                }
-                logging.debug(results[info_device_active["ip"]])
-
-            logging.debug(f'Progreso: {completed_devices}/{total_devices} ({progress}%)')
+        for info_device_active, g in zip(info_devices_active, gt): 
+            try:
+                cant_marcaciones = g.wait()
+            except Exception as e:
+                logging.error(e)
+                cant_marcaciones = 'Conexión fallida'
+                    
+            # Guardar la información en results
+            results[info_device_active["ip"]] = {
+                "punto_marcacion": info_device_active["punto_marcacion"],
+                "nombre_distrito": info_device_active["nombre_distrito"],
+                "id": info_device_active["id"],
+                "cant_marcaciones": str(cant_marcaciones)
+            }
+            logging.debug(results[info_device_active["ip"]])
 
         #failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
         print('TERMINE CANT MARCACIONES!')

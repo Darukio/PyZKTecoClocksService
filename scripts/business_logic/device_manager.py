@@ -77,41 +77,33 @@ def ping_devices(progress_callback=None):
     results = {}
 
     if info_devices:
-        completed_devices = 0
-        total_devices = len([d for d in info_devices if eval(d["activo"])])
         gt = []
         info_devices_active = []
         config.read('config.ini')
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         
-        for i in range(0, total_devices, coroutines_pool_max_size):
-            # Crea un pool de green threads
-            pool = eventlet.GreenPool(coroutines_pool_max_size)
-            info_devices_active = info_devices[i:i + coroutines_pool_max_size]
-            gt = [pool.spawn(ping_device, info_device["ip"], 4370) for info_device in info_devices_active]
+        # Crea un pool de green threads
+        pool = eventlet.GreenPool(coroutines_pool_max_size)
+        for info_device in info_devices:
+            if eval(info_device["activo"]):
+                gt.append(pool.spawn(ping_device, info_device["ip"], 4370))
+                info_devices_active.append(info_device)
 
-            for info_device_active, g in zip(info_devices_active, gt):
-                response = g.wait()
-                if response:
-                    status = "Conexión exitosa"
-                else:
-                    status = "Conexión fallida"
-                
-                completed_devices += 1
-                progress = int((completed_devices / total_devices) * 100)
-                if progress_callback:
-                    progress_callback(progress)
+        for info_device_active, g in zip(info_devices_active, gt):
+            response = g.wait()
+            if response:
+                status = "Conexión exitosa"
+            else:
+                status = "Conexión fallida"
 
-                # Guardar la información en results
-                results[info_device_active["ip"]] = {
-                    "punto_marcacion": info_device_active["punto_marcacion"],
-                    "nombre_distrito": info_device_active["nombre_distrito"],
-                    "id": info_device_active["id"],
-                    "status": status
-                }
-                logging.debug(results[info_device_active["ip"]])
-
-            logging.debug(f'Progreso: {completed_devices}/{total_devices} ({progress}%)')
+            # Guardar la información en results
+            results[info_device_active["ip"]] = {
+                "punto_marcacion": info_device_active["punto_marcacion"],
+                "nombre_distrito": info_device_active["nombre_distrito"],
+                "id": info_device_active["id"],
+                "status": status
+            }
+            logging.debug(results[info_device_active["ip"]])
 
         #failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
         print('TERMINE PING!')

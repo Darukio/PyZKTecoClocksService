@@ -76,12 +76,19 @@ def guardar_marcaciones_en_archivo(attendances, file):
 
 import os
 
-def encontrar_directorio_raiz(path_actual, marcador='main.py'):
+def encontrar_directorio_raiz():
     """
     Sube en la jerarquía de directorios desde `path_actual` hasta encontrar `marcador`.
     Retorna el directorio que contiene a `marcador` o None si no se encuentra.
     """
+    if getattr(sys, 'frozen', False):
+        path_actual = 1
+    else:
+        marcador = 'main.py'
+        path_actual = os.path.abspath(__file__)
+
     while path_actual != os.path.dirname(path_actual):  # Mientras no se llegue al root del sistema de archivos
+        logging.debug(os.path.join(path_actual, marcador))
         if os.path.exists(os.path.join(path_actual, marcador)):
             return path_actual
         path_actual = os.path.dirname(path_actual)

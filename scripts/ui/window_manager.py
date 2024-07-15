@@ -24,7 +24,7 @@ from ..business_logic.hour_manager import *
 from ..business_logic.device_manager import ping_devices  # Importa la función para hacer ping a dispositivos
 from scripts import config
 
-from PyQt5.QtWidgets import QApplication, QDialog, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QSpacerItem, QSizePolicy, QHeaderView, QLabel, QProgressBar, QWidget, QCheckBox, QHBoxLayout, QMessageBox, QFormLayout, QLineEdit
+from PyQt5.QtWidgets import QApplication, QDialog, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QSpacerItem, QSizePolicy, QHeaderView, QLabel, QWidget, QCheckBox, QHBoxLayout, QMessageBox, QFormLayout, QLineEdit
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon
 import logging
@@ -33,7 +33,6 @@ import sys
 
 class OpThread(QThread):
     op_updated = pyqtSignal(dict)
-    progress_updated = pyqtSignal(int)  # Nueva señal para actualizar el progreso
     op_terminated = pyqtSignal(float)
 
     def __init__(self, op_func, parent=None):
@@ -44,14 +43,11 @@ class OpThread(QThread):
         try:
             import time
             tiempo_inicial = time.time()
-            result = self.op_func(progress_callback=self.update_progress)
+            result = self.op_func()
             self.op_updated.emit(result)
             self.op_terminated.emit(tiempo_inicial)
         except Exception as e:
             logging.critical(e)
-
-    def update_progress(self, value):
-        self.progress_updated.emit(value)
 
 # Definición de la clase base común
 class DeviceDialogBase(QDialog):
@@ -67,7 +63,6 @@ class DeviceDialogBase(QDialog):
         
         self.op_thread = OpThread(op_function)
         self.op_thread.op_updated.connect(self.update_table)
-        self.op_thread.progress_updated.connect(self.update_progress_bar)  # Conecta la nueva señal
         self.op_thread.op_terminated.connect(self.terminate_op)
         
         self.init_ui(header_labels)
@@ -103,22 +98,15 @@ class DeviceDialogBase(QDialog):
         self.label_no_fallido.setVisible(False)
         layout.addWidget(self.label_no_fallido)
 
-        self.progress_bar = QProgressBar(self)
-        self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
-
     def update_data(self):
         self.label_no_fallido.setVisible(False)
         self.label_actualizando.setVisible(True)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
         self.table_widget.setSortingEnabled(False)
         self.table_widget.setRowCount(0)
         self.op_thread.start()
 
     def update_table(self, device_status=None):
         self.label_actualizando.setVisible(False)
-        self.progress_bar.setVisible(False)
         logging.debug(device_status)
 
         if not device_status:
@@ -138,9 +126,6 @@ class DeviceDialogBase(QDialog):
 
     def update_last_column(self, row, device_info):
         raise NotImplementedError("Subclasses should implement this method")
-
-    def update_progress_bar(self, value):
-        self.progress_bar.setValue(value)
 
     def reject(self):
         self.op_thread.terminate()
