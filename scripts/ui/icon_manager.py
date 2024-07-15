@@ -17,22 +17,24 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from ..utils.errors import *
+from ..utils.file_manager import *
+from ..business_logic.attendances_manager import *
+from ..business_logic.hour_manager import *
+from scripts import config
+
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QIcon
+import logging
 import os
 import threading
 import time
-import configparser
 import schedule
-from PyQt5.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
 from PyQt5.QtCore import pyqtSlot
-from attendances_manager import *
-from hour_manager import *
-from file_manager import cargar_desde_archivo
-from utils import logging
-from window_manager import DeviceStatusDialog, DeviceAttendancesCountDialog, DeviceAttendancesDialog
 
-# Para leer un archivo INI
-config = configparser.ConfigParser()
+from .window_manager import DeviceStatusDialog, DeviceAttendancesCountDialog, DeviceAttendancesDialog, DeviceDialog
+
 config.read('config.ini')  # Lectura del archivo de configuración config.ini
 
 class MainWindow(QMainWindow):
@@ -58,7 +60,8 @@ class MainWindow(QMainWindow):
         '''
         Crear ícono en la bandeja del sistema con un menú contextual personalizado
         '''
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono
+        file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "resources", "system_tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono
+        logging.debug(file_path)
 
         try:
             self.tray_icon = QSystemTrayIcon(QIcon(file_path), self)  # Creación del QSystemTrayIcon con el ícono y ventana principal asociada
@@ -69,6 +72,7 @@ class MainWindow(QMainWindow):
             menu.addAction(self.__create_action("Iniciar", lambda: self.__opt_start_execution()))  # Acción para iniciar la ejecución
             menu.addAction(self.__create_action("Detener", lambda: self.__opt_stop_execution()))  # Acción para detener la ejecución
             menu.addAction(self.__create_action("Reiniciar", lambda: self.__opt_restart_execution()))  # Acción para reiniciar la ejecución
+            menu.addAction(self.__create_action("Modificar dispositivos", lambda: self.__opt_modify_devices()))  # Acción para modificar dispositivos
             menu.addAction(self.__create_action("Probar conexiones", lambda: self.__opt_test_connections()))  # Acción para probar conexiones
             menu.addAction(self.__create_action("Actualizar hora", lambda: self.__opt_update_devices_time()))  # Acción para actualizar la hora del dispositivo
             menu.addAction(self.__create_action("Obtener marcaciones", lambda: self.__opt_fetch_devices_attendances()))  # Acción para obtener las marcaciones de dispositivos
@@ -131,7 +135,7 @@ class MainWindow(QMainWindow):
             color (str): Color a establecer ('red', 'yellow', 'green').
         """
         self.color_icon = color  # Actualizar el color del ícono
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "system tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono con el nuevo color
+        file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "resources", "system_tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono con el nuevo color
         icon.setIcon(QIcon(file_path))  # Establecer el nuevo ícono con el color especificado
 
     def iniciar_cronometro(self):
@@ -155,6 +159,16 @@ class MainWindow(QMainWindow):
         logging.debug(f'La tarea finalizo en {tiempo_transcurrido:.2f} segundos')
         self.tray_icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)  # Mostrar notificación con el tiempo transcurrido
 
+    def __run_schedule(self):
+        # Función para ejecutar run_pending() en segundo plano
+        try:
+            while self.is_running:
+                logging.debug('Hilo en ejecucion...')
+                schedule.run_pending()
+                time.sleep(1)
+        except Exception as e:
+            logging.error(e)
+    
     @pyqtSlot()
     def __opt_start_execution(self):
         """
@@ -163,7 +177,7 @@ class MainWindow(QMainWindow):
         self.is_running = True  # Marcar que la aplicación está corriendo
         self.__set_icon_color(self.tray_icon, "green")  # Establecer el color del ícono a verde
         try:
-            self.schedule_thread = threading.Thread(target=self.run_schedule)  # Crear hilo para ejecutar run_schedule
+            self.schedule_thread = threading.Thread(target=self.__run_schedule)  # Crear hilo para ejecutar run_schedule
             logging.debug('Hilo iniciado...')  # Registro de depuración: hilo iniciado
             self.schedule_thread.start()  # Iniciar el hilo
         except Exception as e:
@@ -188,6 +202,22 @@ class MainWindow(QMainWindow):
         self.__opt_start_execution()  # Iniciar la ejecución nuevamente
 
     @pyqtSlot()
+    def __opt_modify_devices(self):
+        """
+        Opción para probar las conexiones de dispositivos.
+        """
+        self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
+        try:
+            device_dialog = DeviceDialog()  # Obtener estado de los dispositivos
+            device_dialog.exec_()
+            self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+            # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
+            if self.tray_icon:
+                self.tray_icon.contextMenu().setVisible(True)
+        except Exception as e:
+            logging.error(f"Error al modificar dispositivos: {e}")  # Registro de error si falla la operación
+
+    @pyqtSlot()
     def __opt_test_connections(self):
         """
         Opción para probar las conexiones de dispositivos.
@@ -195,6 +225,7 @@ class MainWindow(QMainWindow):
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
         try:
             device_status_dialog = DeviceStatusDialog()  # Obtener estado de los dispositivos
+            device_status_dialog.op_terminated.connect(self.finalizar_cronometro)
             device_status_dialog.exec_()
             self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
             # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
@@ -222,6 +253,7 @@ class MainWindow(QMainWindow):
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
         try:
             device_attendances_dialog = DeviceAttendancesDialog()
+            device_attendances_dialog.op_terminated.connect(self.finalizar_cronometro)
             device_attendances_dialog.exec_()
             self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
             # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
@@ -238,6 +270,7 @@ class MainWindow(QMainWindow):
         self.__set_icon_color(self.tray_icon, "yellow")  # Establecer el color del ícono a amarillo
         try:
             device_attendances_count_dialog = DeviceAttendancesCountDialog()
+            device_attendances_count_dialog.op_terminated.connect(self.finalizar_cronometro)
             device_attendances_count_dialog.exec_()
             self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
             # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
@@ -277,7 +310,7 @@ def configurar_schedule():
     '''
 
     # Ruta del archivo de texto que contiene las horas de ejecución
-    file_path = os.path.join(os.path.abspath('.'), 'schedule.txt')
+    file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), 'schedule.txt')
     hours_to_perform = None
     try:
         hours_to_perform = cargar_desde_archivo(file_path)  # Cargar horas desde el archivo (función definida en file_manager)

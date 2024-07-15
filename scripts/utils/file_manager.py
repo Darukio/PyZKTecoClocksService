@@ -19,7 +19,7 @@
 
 import os
 import threading
-from utils import logging
+import logging
 
 file_lock = threading.Lock()
 
@@ -33,7 +33,7 @@ def cargar_desde_archivo(file_path):
     Returns:
     - List[str]: Lista del contenido del archivo.
     '''
-    from errors import CargaArchivoFallida
+    from .errors import CargaArchivoFallida
 
     content = []
     try:
@@ -45,7 +45,7 @@ def cargar_desde_archivo(file_path):
 
 def crear_carpeta_y_devolver_ruta(*args):
     # Directorio base donde se almacenarán las carpetas con la IP
-    directorio_actual = os.path.abspath('.')
+    directorio_actual = encontrar_directorio_raiz(os.path.abspath(__file__))
     ruta_destino = directorio_actual
     
     for index, carpeta in enumerate(args, start=1):
@@ -73,3 +73,16 @@ def guardar_marcaciones_en_archivo(attendances, file):
         logging.error(f'Process terminate: {e}')
     finally:
         file_lock.release()
+
+import os
+
+def encontrar_directorio_raiz(path_actual, marcador='main.py'):
+    """
+    Sube en la jerarquía de directorios desde `path_actual` hasta encontrar `marcador`.
+    Retorna el directorio que contiene a `marcador` o None si no se encuentra.
+    """
+    while path_actual != os.path.dirname(path_actual):  # Mientras no se llegue al root del sistema de archivos
+        if os.path.exists(os.path.join(path_actual, marcador)):
+            return path_actual
+        path_actual = os.path.dirname(path_actual)
+    return None

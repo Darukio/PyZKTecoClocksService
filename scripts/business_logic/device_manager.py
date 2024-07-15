@@ -17,17 +17,15 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from connection import *
-from errors import *
-from file_manager import *
-from utils import logging
-import configparser
-import time
-import os
+from ..utils.errors import *
+from ..utils.file_manager import *
+import logging
 import eventlet
-
-# Para leer un archivo INI
-config = configparser.ConfigParser()
+import os
+from scripts import config
+from .connection import *
+import time
+from scripts import config
 
 def organizar_info_dispositivos(line):
     # Dividir la línea en partes utilizando el separador " - "
@@ -50,7 +48,7 @@ def organizar_info_dispositivos(line):
 
 def obtener_info_dispositivos():
     # Obtiene la ubicación del archivo de texto
-    file_path = os.path.join(os.path.abspath('.'), 'info_devices.txt')
+    file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), 'info_devices.txt')
     logging.debug(file_path)
     # Obtiene la info de dispositivos de info_devices.txt
     data_list = cargar_desde_archivo(file_path)
@@ -67,7 +65,7 @@ def obtener_info_dispositivos():
         logging.debug(info_devices)
     return info_devices
 
-def ping_devices():
+def ping_devices(progress_callback=None):
     info_devices = None
     try:
         # Obtiene todos los dispositivos en una lista formateada
@@ -76,43 +74,50 @@ def ping_devices():
     except Exception as e:
         logging.error(e)
 
-    failed_connections = {}
+    results = {}
+
     if info_devices:
+        completed_devices = 0
+        total_devices = len([d for d in info_devices if eval(d["activo"])])
+        gt = []
+        info_devices_active = []
         config.read('config.ini')
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         
-        # Crear un pool de green threads
-        pool = eventlet.GreenPool(coroutines_pool_max_size)
+        for i in range(0, total_devices, coroutines_pool_max_size):
+            # Crea un pool de green threads
+            pool = eventlet.GreenPool(coroutines_pool_max_size)
+            info_devices_active = info_devices[i:i + coroutines_pool_max_size]
+            gt = [pool.spawn(ping_device, info_device["ip"], 4370) for info_device in info_devices_active]
 
-        results = {}
-        gt = []
-        info_devices_active = []
-        # Itera a través de los dispositivos
-        for info_device in info_devices:
-            # Si el dispositivo se encuentra activo...
-            if eval(info_device["activo"]):
-                gt.append(pool.spawn(ping_device, info_device["ip"], 4370))
-                info_devices_active.append(info_device)
-
-        for info_device_active, g in zip(info_devices_active, gt):
-            response = g.wait()
-            if response:
-                status = "Conexión exitosa"
-            else:
-                status = "Conexión fallida"
+            for info_device_active, g in zip(info_devices_active, gt):
+                response = g.wait()
+                if response:
+                    status = "Conexión exitosa"
+                else:
+                    status = "Conexión fallida"
                 
-            # Guardar la información en results
-            results[info_device_active["ip"]] = {
-                "punto_marcacion": info_device_active["punto_marcacion"],
-                "nombre_distrito": info_device_active["nombre_distrito"],
-                "id": info_device_active["id"],
-                "status": status
-            }
-            logging.debug(results[info_device_active["ip"]])
+                completed_devices += 1
+                progress = int((completed_devices / total_devices) * 100)
+                if progress_callback:
+                    progress_callback(progress)
 
-        failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
+                # Guardar la información en results
+                results[info_device_active["ip"]] = {
+                    "punto_marcacion": info_device_active["punto_marcacion"],
+                    "nombre_distrito": info_device_active["nombre_distrito"],
+                    "id": info_device_active["id"],
+                    "status": status
+                }
+                logging.debug(results[info_device_active["ip"]])
 
-    return failed_connections
+            logging.debug(f'Progreso: {completed_devices}/{total_devices} ({progress}%)')
+
+        #failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
+        print('TERMINE PING!')
+        logging.debug('TERMINE PING!')
+
+    return results
 
 def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
     config.read('config.ini')

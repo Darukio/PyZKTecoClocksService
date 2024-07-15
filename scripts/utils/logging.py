@@ -17,14 +17,19 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import os
 import logging
 
+# Crear la carpeta logs si no existe
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
 # Configurar el sistema de registros básico para program_debug.log
-logging.basicConfig(filename='program_debug.log', level=logging.DEBUG,
+logging.basicConfig(filename='logs/program_debug.log', level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Configurar un controlador adicional para los niveles de warning, error y critical en program_error.log
-error_logger = logging.FileHandler('program_error.log')
+error_logger = logging.FileHandler('logs/program_error.log')
 error_logger.setLevel(logging.WARNING)
 
 # Definir un formato para el controlador adicional

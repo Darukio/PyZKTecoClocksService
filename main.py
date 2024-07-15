@@ -20,8 +20,8 @@
 import eventlet
 eventlet.monkey_patch()
 from PyQt5.QtWidgets import QApplication
-from icon_manager import MainWindow
-from utils import logging
+from scripts.ui.icon_manager import MainWindow
+from scripts.utils.logging import logging
 import sys
 import configparser
 import threading
@@ -30,7 +30,7 @@ import threading
 VERSION = "v1.0.0-beta"
 
 # Para leer un archivo INI
-config = configparser.ConfigParser()
+from scripts import config
 config.read('config.ini')
 
 def main():
@@ -39,7 +39,7 @@ def main():
 
     log_config()
 
-    logFilePath = 'console_log.txt'
+    logFilePath = 'logs/console_log.txt'
 
     # Redirigir salida estándar y de error al archivo de registro
     sys.stdout = open(logFilePath, 'a')

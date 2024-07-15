@@ -24,7 +24,7 @@ import logging
 class ErrorConEscrituraEnArchivo(Exception):
     def __init__(self, nombre_modelo, punto_marcacion, ip, message_prefix):
         try:
-            from file_manager import crear_carpeta_y_devolver_ruta
+            from .file_manager import crear_carpeta_y_devolver_ruta
             # Llama a la función desde el módulo importado
             folder_path = crear_carpeta_y_devolver_ruta('devices', 'errors')
             new_date = datetime.today().date().strftime("%Y-%m-%d")

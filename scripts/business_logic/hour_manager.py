@@ -17,17 +17,17 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from connection import *
-from device_manager import *
-from errors import *
-from utils import logging
+from ..utils.errors import *
+from ..utils.file_manager import *
+import logging
 import eventlet
-import configparser
+import os
+from scripts import config
+from .connection import *
+from .device_manager import *
+from scripts import config
 
-# Para leer un archivo INI
-config = configparser.ConfigParser()
-
-def actualizar_hora_dispositivos():
+def actualizar_hora_dispositivos(progress_callback=None):
     info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
@@ -52,11 +52,9 @@ def actualizar_hora_dispositivos():
         # Espera a que todas las corutinas en el pool hayan terminado
         for g in gt:
             try:
-                info_device = g.wait()
-                logging.debug(f'{info_device} hola')
+                g.wait()
             except Exception as e:
-                pass
-                #logging.error(e)
+                logging.error(e)
 
         print('TERMINE HORA!')
         logging.debug('TERMINE HORA!')
@@ -65,21 +63,8 @@ def actualizar_hora_dispositivo(info_device):
     try:
         reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370,))
     except IntentoConexionFallida as e:
-        try:
-            raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
-        except Exception as e:
-            logging.error(f'{info_device["ip"]} hola')
-            raise e
+        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except HoraValidacionFallida as e:
-        try:
-            raise HoraDesactualizada(info_device["nombre_modelo"], info_device["punto_marcacion"], info_device["ip"])
-        except Exception as e:
-            logging.error(f'{info_device["ip"]} hola')
-            raise e
+        raise HoraDesactualizada(info_device["nombre_modelo"], info_device["punto_marcacion"], info_device["ip"])
     except Exception as e:
-        try:
-            raise e
-        except Exception as e:
-            logging.error(f'{info_device["ip"]} hola')
-
-    return info_device["ip"]
+        raise e

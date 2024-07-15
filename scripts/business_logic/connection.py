@@ -17,15 +17,15 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from datetime import datetime
-from utils import logging
-from errors import *
-from zk import ZK, ZK_helper
-import configparser
+from ..utils.errors import *
+from ..utils.file_manager import *
+import logging
 import eventlet
-
-# Para leer un archivo INI
-config = configparser.ConfigParser()
+import os
+from scripts import config
+from datetime import datetime
+from zk import ZK, ZK_helper
+from scripts import config
 
 def conectar(ip, port, ommit_ping=True):
     conn = None
@@ -47,7 +47,8 @@ def conectar(ip, port, ommit_ping=True):
 
 def ping_device(ip, port):
     try:
-        zk_helper = ZK_helper(ip, port, 5)
+        config.read('config.ini')
+        zk_helper = ZK_helper(ip, port, config['Network_config']['size_ping_test_connection'])
         return zk_helper.test_ping()
     except Exception as e:
         logging.error(e)
