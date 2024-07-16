@@ -112,7 +112,7 @@ def gestionar_marcaciones_individual(info_device, attendances):
     gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 
 def gestionar_marcaciones_global(attendances):
-    folder_path = encontrar_directorio_raiz(os.path.abspath(__file__))
+    folder_path = encontrar_directorio_raiz()
     file_name = 'attendances_file.txt'
     gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 

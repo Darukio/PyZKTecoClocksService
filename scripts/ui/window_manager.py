@@ -58,7 +58,7 @@ class DeviceDialogBase(QDialog):
         self.setWindowTitle(window_title)
         self.setMinimumSize(600, 400)
         
-        file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "resources", "fingerprint.ico")
+        file_path = os.path.join(encontrar_directorio_de_marcador("resources"), "resources", "fingerprint.ico")
         self.setWindowIcon(QIcon(file_path))
         
         self.op_thread = OpThread(op_function)
@@ -184,10 +184,10 @@ class DeviceDialog(QDialog):
         self.setWindowTitle("Modificar dispositivos")
         self.setMinimumSize(600, 400)
         
-        file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "resources", "fingerprint.ico")
+        file_path = os.path.join(encontrar_directorio_de_marcador("resources"), "resources", "fingerprint.ico")
         self.setWindowIcon(QIcon(file_path))
         
-        self.file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "info_devices.txt")
+        self.file_path = os.path.join(encontrar_directorio_raiz(), "info_devices.txt")
         self.data = []
         self.max_id = 0
         self.init_ui()

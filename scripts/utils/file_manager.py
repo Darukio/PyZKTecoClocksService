@@ -20,6 +20,7 @@
 import os
 import threading
 import logging
+import sys
 
 file_lock = threading.Lock()
 
@@ -45,8 +46,7 @@ def cargar_desde_archivo(file_path):
 
 def crear_carpeta_y_devolver_ruta(*args):
     # Directorio base donde se almacenarán las carpetas con la IP
-    directorio_actual = encontrar_directorio_raiz(os.path.abspath(__file__))
-    ruta_destino = directorio_actual
+    ruta_destino = encontrar_directorio_raiz()
     
     for index, carpeta in enumerate(args, start=1):
         ruta_destino = os.path.join(ruta_destino, carpeta.lower())
@@ -74,22 +74,23 @@ def guardar_marcaciones_en_archivo(attendances, file):
     finally:
         file_lock.release()
 
-import os
-
-def encontrar_directorio_raiz():
-    """
-    Sube en la jerarquía de directorios desde `path_actual` hasta encontrar `marcador`.
-    Retorna el directorio que contiene a `marcador` o None si no se encuentra.
-    """
-    if getattr(sys, 'frozen', False):
-        path_actual = 1
-    else:
-        marcador = 'main.py'
-        path_actual = os.path.abspath(__file__)
-
+def encontrar_directorio_de_marcador(marcador, path_actual=os.path.abspath(os.path.dirname(__file__))):
     while path_actual != os.path.dirname(path_actual):  # Mientras no se llegue al root del sistema de archivos
-        logging.debug(os.path.join(path_actual, marcador))
+        logging.debug(f"Buscando en: {os.path.join(path_actual, marcador)}")
         if os.path.exists(os.path.join(path_actual, marcador)):
             return path_actual
         path_actual = os.path.dirname(path_actual)
+    
     return None
+
+def encontrar_directorio_raiz():
+    path = None
+    logging.debug(f'SE EJECUTA DESDE EXE?: {getattr(sys, 'frozen', False)}')
+    if getattr(sys, 'frozen', False):
+        path = os.path.dirname(sys.executable)
+    else:
+        marcador="main.py"
+        logging.debug(path)
+        path = encontrar_directorio_de_marcador(marcador)
+
+    return path

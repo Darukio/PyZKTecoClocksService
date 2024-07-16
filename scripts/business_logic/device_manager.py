@@ -48,7 +48,7 @@ def organizar_info_dispositivos(line):
 
 def obtener_info_dispositivos():
     # Obtiene la ubicación del archivo de texto
-    file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), 'info_devices.txt')
+    file_path = os.path.join(encontrar_directorio_raiz(), 'info_devices.txt')
     logging.debug(file_path)
     # Obtiene la info de dispositivos de info_devices.txt
     data_list = cargar_desde_archivo(file_path)

@@ -40,7 +40,6 @@ config.read('config.ini')  # Lectura del archivo de configuración config.ini
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        logging.debug('hola')
         self.is_running = False  # Variable para indicar si la aplicación está corriendo
         self.schedule_thread = None  # Hilo para ejecutar tareas programadas
         self.checked = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
@@ -61,23 +60,7 @@ class MainWindow(QMainWindow):
         '''
         Crear ícono en la bandeja del sistema con un menú contextual personalizado
         '''
-        logging.debug('mola')
-        import sys
-        logging.debug(f'SE EJECUTA DESDE EXE?: {getattr(sys, 'frozen', False)}')
-        logging.debug(f'EJECUTABLE: {os.path.dirname(sys.executable)}')
-        archivos = os.listdir(os.path.dirname(sys.executable))
-        logging.debug(archivos)
-        logging.debug(f'ARCHIVO: {os.path.dirname(os.path.abspath(__file__))}')
-        archivos = os.listdir(os.path.dirname(os.path.abspath(__file__)))
-        logging.debug(archivos)
-        logging.debug(f'ARCHIVO: {os.path.dirname(os.path.dirname(os.path.abspath(__file__)))}')
-        archivos = os.listdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        logging.debug(archivos)
-        logging.debug(f'ARCHIVO: {os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))}')
-        archivos = os.listdir(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        logging.debug(archivos)
-        file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "resources", "system_tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono
-        logging.debug('chau')
+        file_path = os.path.join(encontrar_directorio_de_marcador("resources"), "resources", "system_tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono
         logging.debug(file_path)
 
         try:
@@ -152,7 +135,7 @@ class MainWindow(QMainWindow):
             color (str): Color a establecer ('red', 'yellow', 'green').
         """
         self.color_icon = color  # Actualizar el color del ícono
-        file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), "resources", "system_tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono con el nuevo color
+        file_path = os.path.join(encontrar_directorio_de_marcador("resources"), "resources", "system_tray", f"circle-{self.color_icon}.png")  # Ruta del archivo del ícono con el nuevo color
         icon.setIcon(QIcon(file_path))  # Establecer el nuevo ícono con el color especificado
 
     def iniciar_cronometro(self):
@@ -325,9 +308,9 @@ def configurar_schedule():
     '''
     Configurar las tareas programadas en base a las horas cargadas desde el archivo.
     '''
-
     # Ruta del archivo de texto que contiene las horas de ejecución
-    file_path = os.path.join(encontrar_directorio_raiz(os.path.abspath(__file__)), 'schedule.txt')
+    file_path = os.path.join(encontrar_directorio_raiz(), 'schedule.txt')
+    logging.debug(file_path)
     hours_to_perform = None
     try:
         hours_to_perform = cargar_desde_archivo(file_path)  # Cargar horas desde el archivo (función definida en file_manager)
