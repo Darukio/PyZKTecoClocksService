@@ -22,20 +22,39 @@ from ..utils.file_manager import *
 from ..business_logic.attendances_manager import *
 from ..business_logic.hour_manager import *
 from scripts import config
-
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
 import logging
 import os
-import threading
 import time
 import schedule
 from PyQt5.QtWidgets import QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
-from PyQt5.QtCore import pyqtSlot
-
+from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal
 from .window_manager import DeviceStatusDialog, DeviceAttendancesCountDialog, DeviceAttendancesDialog, DeviceDialog
 
 config.read('config.ini')  # Lectura del archivo de configuración config.ini
+
+class ScheduleThread(QThread):
+    operation_running = pyqtSignal(bool)
+
+    def __init__(self):
+        super().__init__()
+        self.is_running = True  # Variable para controlar el estado del hilo
+        self.operation_running.emit(self.is_running)  # Emitir resultado
+
+    def run(self):
+        # Función para ejecutar run_pending() en segundo plano
+        try:
+            while self.is_running:
+                logging.debug('Hilo en ejecucion...')
+                schedule.run_pending()
+                time.sleep(1)  # Simular trabajo
+        except Exception as e:
+            logging.error(e)
+
+    def stop(self):
+        self.is_running = False
+        self.operation_running.emit(self.is_running)  # Cambiar el estado para detener el hilo
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -158,40 +177,37 @@ class MainWindow(QMainWindow):
         tiempo_transcurrido = tiempo_final - tiempo_inicial  # Calcular el tiempo transcurrido
         logging.debug(f'La tarea finalizo en {tiempo_transcurrido:.2f} segundos')
         self.tray_icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)  # Mostrar notificación con el tiempo transcurrido
-
-    def __run_schedule(self):
-        # Función para ejecutar run_pending() en segundo plano
-        try:
-            while self.is_running:
-                logging.debug('Hilo en ejecucion...')
-                schedule.run_pending()
-                time.sleep(1)
-        except Exception as e:
-            logging.error(e)
     
     @pyqtSlot()
     def __opt_start_execution(self):
         """
         Opción para iniciar la ejecución de la aplicación.
         """
-        self.is_running = True  # Marcar que la aplicación está corriendo
+        self.__update_running_thread(True)  # Marcar que la aplicación está corriendo
         self.__set_icon_color(self.tray_icon, "green")  # Establecer el color del ícono a verde
         try:
-            self.schedule_thread = threading.Thread(target=self.__run_schedule)  # Crear hilo para ejecutar run_schedule
+            self.schedule_thread = ScheduleThread()
+            self.schedule_thread.operation_running.connect(self.__update_running_thread)            
             logging.debug('Hilo iniciado...')  # Registro de depuración: hilo iniciado
-            self.schedule_thread.start()  # Iniciar el hilo
+            self.schedule_thread.start()
         except Exception as e:
             logging.critical(e)  # Registro crítico si ocurre un error al iniciar el hilo
+
+    def __update_running_thread(self, is_running):
+        self.is_running = is_running
 
     @pyqtSlot()
     def __opt_stop_execution(self):
         """
         Opción para detener la ejecución de la aplicación.
         """
-        if self.schedule_thread and self.schedule_thread.is_alive():
-            self.schedule_thread.join()  # Esperar a que el hilo termine
+        self.__update_running_thread(False)
+        logging.debug(self.schedule_thread)
+        if self.schedule_thread and self.schedule_thread.is_running:
+            self.schedule_thread.stop()  # Esperar a que el hilo termine
         logging.debug('Hilo detenido...')  # Registro de depuración: hilo detenido
-        self.__set_icon_color(self.tray_icon, "red")  # Establecer el color del ícono a rojo
+        if self.color_icon != "yellow":
+            self.__set_icon_color(self.tray_icon, "red")  # Establecer el color del ícono a rojo
 
     @pyqtSlot()
     def __opt_restart_execution(self):

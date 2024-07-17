@@ -27,10 +27,10 @@ from datetime import datetime
 from zk import ZK, ZK_helper
 from scripts import config
 
-def conectar(ip, port, ommit_ping=True):
+def conectar(ip, port):
     conn = None
     try:
-        zk = ZK(ip, port)
+        zk = ZK(ip, port, ommit_ping=True)
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
         logging.debug(conn)

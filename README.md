@@ -16,7 +16,7 @@ python install.py # Instala las dependencias en un entorno virtual venv
 
 ```bash
 # Ejecutar en la consola con permisos de admin
-pyinstaller.exe --noconsole --onefile --hidden-import=eventlet.hubs.epolls --hidden-import=eventlet.hubs.kqueue --hidden-import=eventlet.hubs.selects --hidden-import=dns --hidden-import=dns.dnssec --hidden-import=dns.e164 --hidden-import=dns.hash --hidden-import=dns.namedict --hidden-import=dns.tsigkeyring --hidden-import=dns.update --hidden-import=dns.version --hidden-import=dns.zone --hidden-import=dns.versioned -n "Reloj de Asistencias" -i "resources/fingerprint.ico" --add-data "resources/system_tray/*;resources/system_tray" --log-level=DEBUG --debug all main.py
+pyinstaller.exe --noconsole --onefile --hidden-import=eventlet.hubs.epolls --hidden-import=eventlet.hubs.kqueue --hidden-import=eventlet.hubs.selects --hidden-import=dns --hidden-import=dns.dnssec --hidden-import=dns.e164 --hidden-import=dns.hash --hidden-import=dns.namedict --hidden-import=dns.tsigkeyring --hidden-import=dns.update --hidden-import=dns.version --hidden-import=dns.zone --hidden-import=dns.versioned -n "Gestor Reloj de Asistencias" -i "resources/fingerprint.ico" --add-data "resources/system_tray/*;resources/system_tray" --log-level=DEBUG --debug all main.py
 # Configura la inicialización del ejecutable cuando se enciende la PC
 python configure_startup.py
 # Ejecutar main.exe
