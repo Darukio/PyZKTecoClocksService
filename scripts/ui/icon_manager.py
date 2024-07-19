@@ -45,10 +45,10 @@ class ScheduleThread(QThread):
     def run(self):
         # Función para ejecutar run_pending() en segundo plano
         try:
+            logging.debug('Hilo en ejecucion...')
             while self.is_running:
-                logging.debug('Hilo en ejecucion...')
                 schedule.run_pending()
-                time.sleep(1)  # Simular trabajo
+                time.sleep(60)  # Simular trabajo
         except Exception as e:
             logging.error(e)
 
@@ -66,6 +66,8 @@ class MainWindow(QMainWindow):
         self.tray_icon = None  # Variable para almacenar el QSystemTrayIcon
         self.__init_ui()  # Inicialización de la interfaz de usuario
         configurar_schedule()  # Configuración de las tareas programadas
+
+        self.__opt_start_execution()
 
     def __init_ui(self):
         self.setWindowTitle('Ventana principal')  # Título de la ventana principal
@@ -327,19 +329,35 @@ def configurar_schedule():
     # Ruta del archivo de texto que contiene las horas de ejecución
     file_path = os.path.join(encontrar_directorio_raiz(), 'schedule.txt')
     logging.debug(file_path)
-    hours_to_perform = None
+
     try:
-        hours_to_perform = cargar_desde_archivo(file_path)  # Cargar horas desde el archivo (función definida en file_manager)
+        content = cargar_desde_archivo(file_path)  # Cargar contenido desde el archivo
     except Exception as e:
         logging.error(e)  # Registro de error si falla la operación
+        return
 
-    if hours_to_perform:
-        # Iterar las horas de ejecución
-        for hour_to_perform in hours_to_perform:
-            '''
-            Ejecutar la tarea de actualizar hora y guardar las 
-            marcaciones en archivos (individual y en conjunto)
-            en la hora especificada en schedule.txt
-            '''
+    gestionar_hours = []
+    actualizar_hours = []
+    current_task = None
 
-            schedule.every().day.at(hour_to_perform).do(gestionar_marcaciones_dispositivos)  # Programar tarea diaria a la hora especificada
+    for line in content:
+        if line.startswith("#"):
+            if "gestionar_marcaciones_dispositivos" in line:
+                current_task = "gestionar"
+            elif "actualizar_hora_dispositivos" in line:
+                current_task = "actualizar"
+        elif line:
+            if current_task == "gestionar":
+                gestionar_hours.append(line)
+            elif current_task == "actualizar":
+                actualizar_hours.append(line)
+
+    if gestionar_hours:
+        # Iterar las horas de ejecución para gestionar_marcaciones_dispositivos
+        for hour_to_perform in gestionar_hours:
+            schedule.every().day.at(hour_to_perform).do(gestionar_marcaciones_dispositivos)
+
+    if actualizar_hours:
+        # Iterar las horas de ejecución para actualizar_hora_dispositivos
+        for hour_to_perform in actualizar_hours:
+            schedule.every().day.at(hour_to_perform).do(actualizar_hora_dispositivos)

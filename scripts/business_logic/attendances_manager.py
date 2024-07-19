@@ -51,20 +51,19 @@ def gestionar_marcaciones_dispositivos(progress_callback=None):
                 gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device))
                 info_devices_active.append(info_device)
 
-        for info_device_active, g in zip(info_devices_active, gt):
+        for info_device_active, g in zip(info_devices_active, gt): 
             try:
-                g.wait()
-                status = 'Marcaciones obtenidas'
+                cant_marcaciones = g.wait()
             except Exception as e:
                 logging.error(e)
-                status = 'Conexión fallida'
+                cant_marcaciones = 'Conexión fallida'
 
             # Guardar la información en results
             results[info_device_active["ip"]] = {
                 "punto_marcacion": info_device_active["punto_marcacion"],
                 "nombre_distrito": info_device_active["nombre_distrito"],
                 "id": info_device_active["id"],
-                "status": status
+                "cant_marcaciones": str(cant_marcaciones)
             }
             logging.debug(results[info_device_active["ip"]])
 
@@ -78,7 +77,7 @@ def gestionar_marcaciones_dispositivo(info_device):
     try:
         attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370,))
         attendances = format_attendances(attendances, info_device["id"])
-        logging.info(f'{info_device["ip"]} - Attendances: {attendances}')
+        logging.info(f'{info_device["ip"]} - Length attendances: {len(attendances)} - Attendances: {attendances}')
         
         gestionar_marcaciones_individual(info_device, attendances)
         gestionar_marcaciones_global(attendances)
@@ -89,7 +88,7 @@ def gestionar_marcaciones_dispositivo(info_device):
     except Exception as e:
         raise e
 
-    return
+    return len(attendances)
 
 def format_attendances(attendances, id):
     formatted_attendances = []
@@ -112,8 +111,11 @@ def gestionar_marcaciones_individual(info_device, attendances):
     gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 
 def gestionar_marcaciones_global(attendances):
+    # Obtener el valor de name_attendances_file de la sección [File_config]
+    config.read('config.ini')
+    name_attendances_file = config['File_config']['name_attendances_file']
     folder_path = encontrar_directorio_raiz()
-    file_name = 'attendances_file.txt'
+    file_name = f"{name_attendances_file}.txt"
     gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 
 def gestionar_guardado_de_marcaciones(attendances, folder_path, file_name):
