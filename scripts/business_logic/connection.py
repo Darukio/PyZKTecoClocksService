@@ -33,13 +33,15 @@ def conectar(ip, port):
         zk = ZK(ip, port, ommit_ping=True)
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
-        logging.debug(conn)
-        logging.debug(conn.get_platform())
-        logging.debug(conn.get_device_name())
         #logging.info('Disabling device...')
         #conn.disable_device()
         logging.info(f'Successfully connected to device {ip}.')
         #conn.test_voice(index=10)
+        logging.debug(f'{ip}: {conn}')
+        logging.info(f'{ip} - Platform: {conn.get_platform()}')
+        logging.info(f'{ip} - Device name: {conn.get_device_name()}')
+        logging.info(f'{ip} - Firmware version: {conn.get_firmware_version()}')
+        logging.info(f'{ip} - Old firmware: {conn.get_compat_old_firmware()}')
     except Exception as e:
         raise IntentoConexionFallida from e
     eventlet.sleep(0)
