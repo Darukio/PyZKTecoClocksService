@@ -43,8 +43,8 @@ class OpThread(QThread):
         try:
             import time
             tiempo_inicial = time.time()
-            result = self.op_func()
-            self.op_updated.emit(result)
+            self.result = self.op_func()
+            self.op_updated.emit(self.result)
             self.op_terminated.emit(tiempo_inicial)
         except Exception as e:
             logging.critical(e)
@@ -64,7 +64,7 @@ class DeviceDialogBase(QDialog):
         self.op_thread = OpThread(op_function)
         self.op_thread.op_updated.connect(self.update_table)
         self.op_thread.op_terminated.connect(self.terminate_op)
-        
+
         self.init_ui(header_labels)
     
     def terminate_op(self, tiempo_inicial):
@@ -124,6 +124,9 @@ class DeviceDialogBase(QDialog):
         self.table_widget.setSortingEnabled(True)
         self.table_widget.sortByColumn(4, Qt.AscendingOrder)
 
+        if hasattr(self, 'show_btn_retry_connection') and callable(getattr(self, 'show_btn_retry_connection')):
+            self.show_btn_retry_connection()
+
     def update_last_column(self, row, device_info):
         raise NotImplementedError("Subclasses should implement this method")
 
@@ -153,7 +156,17 @@ class DeviceAttendancesDialog(DeviceDialogBase):
     def __init__(self, parent=None):
         header_labels = ["IP", "Punto de Marcación", "Nombre de Distrito", "ID", "Cant. de Marcaciones"]
         super().__init__(parent, gestionar_marcaciones_dispositivos, "Obtener marcaciones", header_labels)
-        self.op_thread.op_updated.connect(self.add_btn_retry_connection)
+
+        self.__add_btn_retry_connection()
+
+    def __add_btn_retry_connection(self):
+        self.btn_retry_connection = QPushButton("Reintentar conexión", self)
+        self.btn_retry_connection.clicked.connect(self.on_retry_connection_clicked)
+        self.layout().addWidget(self.btn_retry_connection, alignment=Qt.AlignCenter)
+        self.btn_retry_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+
+    def show_btn_retry_connection(self):
+        self.btn_retry_connection.setVisible(True)
 
     def update_last_column(self, row, device_info):
         status_item = QTableWidgetItem(device_info.get("cant_marcaciones", ""))
@@ -164,12 +177,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
         
         self.table_widget.setItem(row, 4, status_item)
     
-    def add_btn_retry_connection(self, device_status=None):
-        self.btn_retry_connection = QPushButton("Reintentar conexión", self)
-        self.btn_retry_connection.clicked.connect(lambda: self.retry_connection(device_status))
-        self.layout().addWidget(self.btn_retry_connection, alignment=Qt.AlignCenter)
-
-    def retry_connection(self, device_status=None):
+    def on_retry_connection_clicked(self):
         try:
             with open('info_devices.txt', 'r') as file:
                 lines = file.readlines()
@@ -178,7 +186,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
             for line in lines:
                 parts = line.strip().split(' - ')
                 ip = parts[3]
-                if ip in device_status and device_status[ip]["cant_marcaciones"] == "Conexión fallida":
+                if ip in self.op_thread.result and self.op_thread.result[ip]["cant_marcaciones"] == "Conexión fallida":
                     parts[5] = "True"
                 else:
                     parts[5] = "False"
@@ -192,6 +200,8 @@ class DeviceAttendancesDialog(DeviceDialogBase):
             self.update_data()
         except Exception as e:
             logging.error(f"Error al actualizar el estado activo: {e}")
+    
+        self.btn_retry_connection.setVisible(False)  # Ocultar el botón después de hacer clic
 
 
 # Subclase para el diálogo de cantidad de marcaciones
