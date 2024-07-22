@@ -102,7 +102,7 @@ def validar_hora(zktime):
     zktime.year != newtime.year):
         raise Exception('Hours or date between device and machine doesn\'t match')
     
-def obtener_marcaciones(conn):
+def obtener_marcaciones(conn, desde_thread):
     attendances = []
     try:
         ip = conn.get_network_params()["ip"]
@@ -116,7 +116,7 @@ def obtener_marcaciones(conn):
         else:
             config.read('config.ini')
             logging.debug(f'clear_attendance: {config['Device_config']['clear_attendance']}')
-            if eval(config['Device_config']['clear_attendance']):
+            if eval(config['Device_config']['clear_attendance']) or desde_thread:
                 logging.debug(f'{ip} - Clearing attendances...')
                 try:
                     conn.clear_attendance()

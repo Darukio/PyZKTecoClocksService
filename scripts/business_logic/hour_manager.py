@@ -25,9 +25,8 @@ import os
 from scripts import config
 from .connection import *
 from .device_manager import *
-from scripts import config
 
-def actualizar_hora_dispositivos(progress_callback=None):
+def actualizar_hora_dispositivos(desde_thread = False):
     info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
@@ -44,7 +43,7 @@ def actualizar_hora_dispositivos(progress_callback=None):
         
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
-            if eval(info_device["activo"]):
+            if eval(info_device["activo"]) or desde_thread:
                 logging.debug(info_device)
                 # Lanza una corutina para cada dispositivo activo
                 gt.append(pool.spawn(actualizar_hora_dispositivo, info_device))
@@ -61,6 +60,7 @@ def actualizar_hora_dispositivos(progress_callback=None):
 
 def actualizar_hora_dispositivo(info_device):
     try:
+        logging.debug('HOLAA')
         reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370,))
     except IntentoConexionFallida as e:
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])

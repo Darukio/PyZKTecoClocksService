@@ -93,7 +93,7 @@ class DeviceDialogBase(QDialog):
         self.label_actualizando.setVisible(False)
         layout.addWidget(self.label_actualizando)
 
-        self.label_no_fallido = QLabel("Sin conexiones fallidas", self)
+        self.label_no_fallido = QLabel("Error", self)
         self.label_no_fallido.setAlignment(Qt.AlignCenter)
         self.label_no_fallido.setVisible(False)
         layout.addWidget(self.label_no_fallido)
@@ -122,10 +122,7 @@ class DeviceDialogBase(QDialog):
             self.update_last_column(row, device_info)
 
         self.table_widget.setSortingEnabled(True)
-        self.table_widget.sortByColumn(4, Qt.AscendingOrder)
-
-        if hasattr(self, 'show_btn_retry_connection') and callable(getattr(self, 'show_btn_retry_connection')):
-            self.show_btn_retry_connection()
+        self.table_widget.sortByColumn(4, Qt.AscendingOrder)            
 
     def update_last_column(self, row, device_info):
         raise NotImplementedError("Subclasses should implement this method")
@@ -156,8 +153,19 @@ class DeviceAttendancesDialog(DeviceDialogBase):
     def __init__(self, parent=None):
         header_labels = ["IP", "Punto de Marcación", "Nombre de Distrito", "ID", "Cant. de Marcaciones"]
         super().__init__(parent, gestionar_marcaciones_dispositivos, "Obtener marcaciones", header_labels)
-
         self.__add_btn_retry_connection()
+
+        self.label_total_marcaciones = QLabel("Total de Marcaciones: 0", self)
+        self.label_total_marcaciones.setAlignment(Qt.AlignCenter)
+        self.layout().addWidget(self.label_total_marcaciones)
+        self.label_total_marcaciones.setVisible(False)
+
+    def update_table(self, device_status=None):
+        self.total_marcaciones = 0
+        super().update_table(device_status)
+        self.show_btn_retry_connection()
+        self.label_total_marcaciones.setText(f"Total de Marcaciones: {self.total_marcaciones}")
+        self.label_total_marcaciones.setVisible(True)
 
     def __add_btn_retry_connection(self):
         self.btn_retry_connection = QPushButton("Reintentar conexión", self)
@@ -167,6 +175,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
 
     def show_btn_retry_connection(self):
         self.btn_retry_connection.setVisible(True)
+        self.btn_actualizar.setVisible(False)
 
     def update_last_column(self, row, device_info):
         status_item = QTableWidgetItem(device_info.get("cant_marcaciones", ""))
@@ -176,8 +185,15 @@ class DeviceAttendancesDialog(DeviceDialogBase):
             status_item.setBackground(QColor(Qt.green))
         
         self.table_widget.setItem(row, 4, status_item)
+        try:
+            self.total_marcaciones += int(device_info.get("cant_marcaciones", 0))
+            logging.debug(self.total_marcaciones)
+        except ValueError:
+            pass
     
     def on_retry_connection_clicked(self):
+        self.label_total_marcaciones.setVisible(False)
+
         try:
             with open('info_devices.txt', 'r') as file:
                 lines = file.readlines()

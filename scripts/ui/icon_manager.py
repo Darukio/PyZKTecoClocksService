@@ -355,9 +355,9 @@ def configurar_schedule():
     if gestionar_hours:
         # Iterar las horas de ejecución para gestionar_marcaciones_dispositivos
         for hour_to_perform in gestionar_hours:
-            schedule.every().day.at(hour_to_perform).do(gestionar_marcaciones_dispositivos)
+            schedule.every().day.at(hour_to_perform).do(gestionar_marcaciones_dispositivos, desde_thread = True)
 
     if actualizar_hours:
         # Iterar las horas de ejecución para actualizar_hora_dispositivos
         for hour_to_perform in actualizar_hours:
-            schedule.every().day.at(hour_to_perform).do(actualizar_hora_dispositivos)
+            schedule.every().day.at(hour_to_perform).do(actualizar_hora_dispositivos, desde_thread = True)

@@ -65,7 +65,7 @@ def obtener_info_dispositivos():
         logging.debug(info_devices)
     return info_devices
 
-def ping_devices(progress_callback=None):
+def ping_devices():
     info_devices = None
     try:
         # Obtiene todos los dispositivos en una lista formateada
@@ -111,7 +111,7 @@ def ping_devices(progress_callback=None):
 
     return results
 
-def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
+def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3, desde_thread = False):
     config.read('config.ini')
     intentos_maximos = int(config['Network_config']['retry_connection'])
     result = None
@@ -123,7 +123,7 @@ def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3):
             if conn is None:
                 conn = conectar(*args, **kwargs)
             logging.debug(f'{args} OPERATION!')
-            result = op(conn)
+            result = op(conn, desde_thread)
             finalizar_conexion(conn)
             break
         except HoraValidacionFallida as e:

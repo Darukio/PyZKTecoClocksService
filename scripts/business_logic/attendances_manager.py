@@ -28,7 +28,8 @@ from .hour_manager import actualizar_hora_dispositivo
 from datetime import datetime
 import os
 
-def gestionar_marcaciones_dispositivos(progress_callback=None):
+def gestionar_marcaciones_dispositivos(desde_thread = False):
+    logging.debug(f'desde_thread = {desde_thread}')
     info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
@@ -47,8 +48,9 @@ def gestionar_marcaciones_dispositivos(progress_callback=None):
         # Crea un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
         for info_device in info_devices:
-            if eval(info_device["activo"]):
-                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device))
+            if eval(info_device["activo"]) or desde_thread:
+                logging.debug(info_device)
+                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device, desde_thread))
                 info_devices_active.append(info_device)
 
         for info_device_active, g in zip(info_devices_active, gt): 
@@ -67,26 +69,27 @@ def gestionar_marcaciones_dispositivos(progress_callback=None):
             }
             logging.debug(results[info_device_active["ip"]])
 
-        #failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
         print('TERMINE MARCACIONES!')
         logging.debug('TERMINE MARCACIONES!')
 
     return results
 
-def gestionar_marcaciones_dispositivo(info_device):
+def gestionar_marcaciones_dispositivo(info_device, p_desde_thread):
     try:
-        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370,))
+        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370,), desde_thread=p_desde_thread)
         attendances = format_attendances(attendances, info_device["id"])
         logging.info(f'{info_device["ip"]} - Length attendances: {len(attendances)} - Attendances: {attendances}')
         
         gestionar_marcaciones_individual(info_device, attendances)
         gestionar_marcaciones_global(attendances)
-
-        actualizar_hora_dispositivo(info_device)
     except IntentoConexionFallida as e:
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except Exception as e:
         raise e
+    try:
+        actualizar_hora_dispositivo(info_device)
+    except Exception as e:
+        logging.error(e)
 
     return len(attendances)
 
