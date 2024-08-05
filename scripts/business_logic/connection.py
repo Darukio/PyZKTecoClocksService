@@ -22,7 +22,6 @@ from ..utils.file_manager import *
 import logging
 import eventlet
 import os
-from scripts import config
 from datetime import datetime
 from zk import ZK, ZK_helper
 from scripts import config
@@ -43,30 +42,30 @@ def conectar(ip, port):
         logging.info(f'{ip} - Firmware version: {conn.get_firmware_version()}')
         logging.info(f'{ip} - Old firmware: {conn.get_compat_old_firmware()}')
     except Exception as e:
-        raise IntentoConexionFallida from e
+        raise IntentoConexionFallida(ip) from e
     eventlet.sleep(0)
     return conn
 
 def ping_device(ip, port):
     try:
-        config.read('config.ini')
+        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
         zk_helper = ZK_helper(ip, port, config['Network_config']['size_ping_test_connection'])
         return zk_helper.test_ping()
     except Exception as e:
         logging.error(e)
         return False
     
-def finalizar_conexion(conn):
+def finalizar_conexion(conn, ip, port):
     #logging.info('Enabling device...')
     #conn.enable_device()
     try:
-        logging.info(f'{conn.get_network_params()["ip"]} - Disconnecting device...')
+        logging.info(f'{ip} - Disconnecting device...')
         conn.disconnect()
     except Exception as e:
-        raise e
+        raise IntentoConexionFallida(ip) from e
     eventlet.sleep(0)
     
-def actualizar_hora(conn):
+def actualizar_hora(conn, desde_thread = False):
     ip = None
     try:
         ip = conn.get_network_params()["ip"]
@@ -74,7 +73,7 @@ def actualizar_hora(conn):
         logging.debug(f'{ip} - Date and hour device: {zktime} - Date and hour machine: {datetime.today()}')
         eventlet.sleep(0)
     except Exception as e:
-        raise IntentoConexionFallida from e
+        raise IntentoConexionFallida(ip) from e
 
     try:
         logging.debug(f'{ip} - Setting updated hour...')
@@ -82,14 +81,14 @@ def actualizar_hora(conn):
         conn.set_time(newtime)
         eventlet.sleep(0)
     except Exception as e:
-        raise IntentoConexionFallida from e
+        raise IntentoConexionFallida(ip) from e
 
     try:
         logging.debug(f'{ip} - Validating hour device...')
         validar_hora(zktime)
         eventlet.sleep(0)
     except Exception as e:
-        raise HoraValidacionFallida from e
+        raise HoraValidacionFallida(ip) from e
 
     return
 
@@ -104,8 +103,13 @@ def validar_hora(zktime):
     
 def obtener_marcaciones(conn, desde_thread):
     attendances = []
+    ip = None
     try:
         ip = conn.get_network_params()["ip"]
+    except Exception as e:
+        logging.error(e)
+
+    try:
         logging.info(f'{ip} - Getting attendances...')
         attendances = conn.get_attendance()
         records = conn.records
@@ -114,9 +118,13 @@ def obtener_marcaciones(conn, desde_thread):
         if records != len(attendances):
             raise Exception('Records mismatch')
         else:
-            config.read('config.ini')
-            logging.debug(f'clear_attendance: {config['Device_config']['clear_attendance']}')
-            if eval(config['Device_config']['clear_attendance']) or desde_thread:
+            config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
+            # Determina la configuración adecuada según el valor de desde_thread
+            config_key = 'clear_attendance_thread' if desde_thread else 'clear_attendance'
+            logging.debug(f'clear_attendance: {config['Device_config'][config_key]}')
+
+            # Evalúa la configuración seleccionada
+            if eval(config['Device_config'][config_key]):
                 logging.debug(f'{ip} - Clearing attendances...')
                 try:
                     conn.clear_attendance()
@@ -124,15 +132,24 @@ def obtener_marcaciones(conn, desde_thread):
                 except Exception as e:
                     logging.error(f'{ip} - Can\'t clear attendances')
                     raise e
+
             return attendances
     except Exception as e:
-        raise IntentoConexionFallida from e
+        raise IntentoConexionFallida(ip) from e
 
-def obtener_cantidad_marcaciones(conn):
+def obtener_cantidad_marcaciones(conn, desde_thread):
+    ip = None
     try:
-        conn.get_attendance()
+        ip = conn.get_network_params()["ip"]
+    except Exception as e:
+        logging.error(e)
+        
+    try:
+        atte = conn.get_attendance()
+        logging.debug(atte)
         records = conn.records
+        logging.debug(records)
         eventlet.sleep(0)
         return records
     except Exception as e:
-        raise IntentoConexionFallida from e
+        raise IntentoConexionFallida(ip) from e

@@ -31,16 +31,17 @@ class ErrorConEscrituraEnArchivo(Exception):
             file_name = f'errors_{new_date}.txt'
             file_path = os.path.join(folder_path, file_name)
             current_time = datetime.now().strftime("%H:%M:%S")
-            self.mensaje = f'{current_time} {message_prefix} {nombre_modelo} - {punto_marcacion}: {ip}\n'
+            self.mensaje = f'{current_time} {ip} - {message_prefix} {nombre_modelo} - {punto_marcacion}\n'
             with open(file_path, 'a') as file:
                 file.write(self.mensaje)
-            self.mensaje = f'{message_prefix} {nombre_modelo} - {punto_marcacion}: {ip}'
+            self.mensaje = f'{ip} - {message_prefix} {nombre_modelo} - {punto_marcacion}'
             super().__init__(self.mensaje)
         except Exception as e:
             logging.error(f'Error al manejar excepción: {e}')
 
 class IntentoConexionFallida(Exception):
-    pass
+    def __init__(self, ip):
+        super().__init__(ip)
 
 class ConexionFallida(ErrorConEscrituraEnArchivo):
     def __init__(self, nombre_modelo, punto_marcacion, ip):
@@ -48,9 +49,8 @@ class ConexionFallida(ErrorConEscrituraEnArchivo):
         super().__init__(nombre_modelo, punto_marcacion, ip, message_prefix)
 
 class HoraValidacionFallida(Exception):
-    def __init__(self):
-        self.mensaje = 'Hours or date between device and machine doesn\'t match'
-        super().__init__(self.mensaje)
+    def __init__(self, ip):
+        super().__init__(ip)
 
 class HoraDesactualizada(ErrorConEscrituraEnArchivo):
     def __init__(self, nombre_modelo, punto_marcacion, ip):

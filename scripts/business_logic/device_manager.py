@@ -79,14 +79,17 @@ def ping_devices():
     if info_devices:
         gt = []
         info_devices_active = []
-        config.read('config.ini')
+        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         
         # Crea un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
         for info_device in info_devices:
             if eval(info_device["activo"]):
-                gt.append(pool.spawn(ping_device, info_device["ip"], 4370))
+                try:
+                    gt.append(pool.spawn(ping_device, info_device["ip"], 4370))
+                except Exception as e:
+                    pass
                 info_devices_active.append(info_device)
 
         for info_device_active, g in zip(info_devices_active, gt):
@@ -112,7 +115,7 @@ def ping_devices():
     return results
 
 def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3, desde_thread = False):
-    config.read('config.ini')
+    config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
     intentos_maximos = int(config['Network_config']['retry_connection'])
     result = None
     conn = None
@@ -124,17 +127,23 @@ def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3, desd
                 conn = conectar(*args, **kwargs)
             logging.debug(f'{args} OPERATION!')
             result = op(conn, desde_thread)
-            finalizar_conexion(conn)
+            logging.debug(f'{args} ENDING!')
+            finalizar_conexion(conn, *args)
+            logging.debug(f'{args} ENDED!')
             break
         except HoraValidacionFallida as e:
             raise e
         except IntentoConexionFallida as e:
             conn = None
-            logging.warning(f"Failed attempt {_ + 1} of {intentos_maximos} for operation {op.__name__}: {e.__cause__}")
+            logging.warning(f"{e} - Failed attempt {_ + 1} of {intentos_maximos} for operation {op.__name__}: {e.__cause__}")
             if result:
                 break
             if _ + 1 == intentos_maximos:
                 raise e
             eventlet.sleep(0)
-    
+        except Exception as e:
+            logging.error(e)
+            pass
+                
+    logging.debug(f'{args} RESULT!')
     return result

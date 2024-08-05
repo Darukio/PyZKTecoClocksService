@@ -76,7 +76,7 @@ def guardar_marcaciones_en_archivo(attendances, file):
 
 def encontrar_directorio_de_marcador(marcador, path_actual=os.path.abspath(os.path.dirname(__file__))):
     while path_actual != os.path.dirname(path_actual):  # Mientras no se llegue al root del sistema de archivos
-        logging.debug(f"Buscando en: {os.path.join(path_actual, marcador)}")
+        #logging.debug(f"Buscando en: {os.path.join(path_actual, marcador)}")
         if os.path.exists(os.path.join(path_actual, marcador)):
             return path_actual
         path_actual = os.path.dirname(path_actual)
@@ -85,12 +85,12 @@ def encontrar_directorio_de_marcador(marcador, path_actual=os.path.abspath(os.pa
 
 def encontrar_directorio_raiz():
     path = None
-    logging.debug(f'SE EJECUTA DESDE EXE?: {getattr(sys, 'frozen', False)}')
+    #logging.debug(f'SE EJECUTA DESDE EXE?: {getattr(sys, 'frozen', False)}')
     if getattr(sys, 'frozen', False):
         path = os.path.dirname(sys.executable)
     else:
         marcador="main.py"
-        logging.debug(path)
+        #logging.debug(path)
         path = encontrar_directorio_de_marcador(marcador)
 
     return path

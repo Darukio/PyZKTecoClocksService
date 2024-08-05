@@ -21,29 +21,34 @@ import eventlet
 eventlet.monkey_patch()
 from PyQt5.QtWidgets import QApplication
 from scripts.ui.icon_manager import MainWindow
-from scripts.utils.logging import logging
+from scripts.utils.logging import config_log, logging
+from scripts.utils.file_manager import encontrar_directorio_raiz
 import sys
+import os
 import configparser
 import threading
 
 # Versión del programa
-VERSION = "v2.2.1-beta"
+VERSION = "v2.4.2-beta"
 
 # Para leer un archivo INI
 from scripts import config
-config.read('config.ini')
+config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
 
 def main():
+    config_log()
+
+    import os
     logging.debug('Script executing...')
-    logging.info(f"Version del programa: {VERSION}")
 
-    log_config()
+    MODE = 'User' if getattr(sys, 'frozen', False) else 'Developer'
+    msg_init = f"Program version: {VERSION} - Mode: {MODE}"
+    logging.info(msg_init)
+    print(msg_init)
+    print_copyright()
 
-    logFilePath = 'logs/console_log.txt'
-
-    # Redirigir salida estándar y de error al archivo de registro
-    sys.stdout = open(logFilePath, 'a')
-    sys.stderr = open(logFilePath, 'a')
+    config_log_console()
+    config_content()
 
     if len(sys.argv) == 1:
         try:
@@ -54,12 +59,37 @@ def main():
         except Exception as e:
             logging.error(e)
 
-def log_config():
+def config_content():
     for section in config.sections():
-        logging.info(f'Section: {section}')
+        logging.debug(f'Section: {section}')
         # Iterar sobre las claves y valores dentro de cada sección
         for key, value in config.items(section):
-            logging.info(f'Subsection: {key}, Value: {value}')
+            logging.debug(f'Subsection: {key}, Value: {value}')
+
+def config_log_console():
+    log_file_path = os.path.join(encontrar_directorio_raiz(), 'logs', 'console_log.txt')
+    logging.debug(encontrar_directorio_raiz())
+    logging.debug(sys.executable)
+    
+    # Asegúrate de que el archivo de log y su directorio existen
+    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+    if not os.path.exists(log_file_path):
+        with open(log_file_path, 'w') as f:
+            pass  # Crear el archivo si no existe
+
+    # Redirigir salida estándar y de error al archivo de registro
+    sys.stdout = open(log_file_path, 'a')
+    sys.stderr = open(log_file_path, 'a')
+
+def print_copyright():
+    copyright_text = """
+PyZKTecoClocks: GUI for managing ZKTeco clocks. 
+Copyright (C) 2024 Paulo Sebastian Spaciuk (Darukio)
+
+This software is licensed under the GNU General Public License v3.0 or later.
+It comes without warranty. See <https://www.gnu.org/licenses/> for details."""
+    print(copyright_text)
+    logging.info(copyright_text)
 
 if __name__ == '__main__':
     main()

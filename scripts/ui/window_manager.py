@@ -187,7 +187,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
         self.table_widget.setItem(row, 4, status_item)
         try:
             self.total_marcaciones += int(device_info.get("cant_marcaciones", 0))
-            logging.debug(self.total_marcaciones)
+            logging.debug(f'Total attendances: {self.total_marcaciones}')
         except ValueError:
             pass
     
@@ -275,6 +275,14 @@ class DeviceDialog(QDialog):
         self.btn_add_data.clicked.connect(self.add_device)
         button_layout.addWidget(self.btn_add_data)
 
+        self.btn_activate_all = QPushButton("Activar todo", self)
+        self.btn_activate_all.clicked.connect(self.activate_all)
+        button_layout.addWidget(self.btn_activate_all)
+
+        self.btn_deactivate_all = QPushButton("Desactivar todo", self)
+        self.btn_deactivate_all.clicked.connect(self.deactivate_all)
+        button_layout.addWidget(self.btn_deactivate_all)
+
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
@@ -285,9 +293,24 @@ class DeviceDialog(QDialog):
         self.btn_save_data.setAutoDefault(False)
         self.btn_save_data.setDefault(False)
         self.btn_add_data.setAutoDefault(False)
-        self.btn_add_data.setDefault(False)        
+        self.btn_add_data.setDefault(False)
+        self.btn_activate_all.setAutoDefault(False)
+        self.btn_activate_all.setDefault(False)
+        self.btn_deactivate_all.setAutoDefault(False)
+        self.btn_deactivate_all.setDefault(False)
 
         self.load_data_and_show()
+
+    # Métodos para la lógica de selección y deselección de casillas "Activo"
+    def activate_all(self):
+        for row in range(self.table_widget.rowCount()):
+            checkbox_delegate = self.table_widget.cellWidget(row, 5)
+            checkbox_delegate.setChecked(True)
+
+    def deactivate_all(self):
+        for row in range(self.table_widget.rowCount()):
+            checkbox_delegate = self.table_widget.cellWidget(row, 5)
+            checkbox_delegate.setChecked(False)
 
     def add_device(self):
         new_id = self.max_id + 1  # Calculate new ID

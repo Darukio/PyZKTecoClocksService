@@ -42,19 +42,25 @@ def gestionar_marcaciones_dispositivos(desde_thread = False):
     if info_devices:
         gt = []
         info_devices_active = []
-        config.read('config.ini')
+        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
 
         # Crea un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
         for info_device in info_devices:
+            logging.debug(f'info_device["activo"]: {eval(info_device["activo"])} desde_thread: {desde_thread}')
             if eval(info_device["activo"]) or desde_thread:
-                logging.debug(info_device)
-                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device, desde_thread))
+                logging.debug(f'info_device_active: {info_device}')
+                try:
+                    gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device, desde_thread))
+                except Exception as e:
+                    logging.error(f'Error in coroutine with {info_device["ip"]}')
                 info_devices_active.append(info_device)
 
-        for info_device_active, g in zip(info_devices_active, gt): 
+        for info_device_active, g in zip(info_devices_active, gt):
+            logging.debug(f'Processing {info_device_active}')
             try:
+                logging.debug(g)
                 cant_marcaciones = g.wait()
             except Exception as e:
                 logging.error(e)
@@ -83,6 +89,7 @@ def gestionar_marcaciones_dispositivo(info_device, p_desde_thread):
         gestionar_marcaciones_individual(info_device, attendances)
         gestionar_marcaciones_global(attendances)
     except IntentoConexionFallida as e:
+        logging.debug(f'ConexionFallida {info_device["ip"]}')
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except Exception as e:
         raise e
@@ -90,6 +97,8 @@ def gestionar_marcaciones_dispositivo(info_device, p_desde_thread):
         actualizar_hora_dispositivo(info_device)
     except Exception as e:
         logging.error(e)
+
+    logging.debug(f'TERMINANDO MARCACIONES DISP {info_device["ip"]}')
 
     return len(attendances)
 
@@ -114,16 +123,16 @@ def gestionar_marcaciones_individual(info_device, attendances):
     gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 
 def gestionar_marcaciones_global(attendances):
-    # Obtener el valor de name_attendances_file de la sección [File_config]
-    config.read('config.ini')
-    name_attendances_file = config['File_config']['name_attendances_file']
+    # Obtener el valor de name_attendances_file de la sección [Program_config]
+    config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
+    name_attendances_file = config['Program_config']['name_attendances_file']
     folder_path = encontrar_directorio_raiz()
     file_name = f"{name_attendances_file}.txt"
     gestionar_guardado_de_marcaciones(attendances, folder_path, file_name)
 
 def gestionar_guardado_de_marcaciones(attendances, folder_path, file_name):
     destiny_path = os.path.join(folder_path, file_name)
-    logging.debug(f'DestinyPath: {destiny_path}')
+    logging.debug(f'destiny_path: {destiny_path}')
     guardar_marcaciones_en_archivo(attendances, destiny_path)
 
 def obtener_cantidad_marcaciones_dispositivos(progress_callback=None):
@@ -139,14 +148,17 @@ def obtener_cantidad_marcaciones_dispositivos(progress_callback=None):
     if info_devices:
         gt = []
         info_devices_active = []
-        config.read('config.ini')
+        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         
         # Crea un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
         for info_device in info_devices:
             if eval(info_device["activo"]):
-                gt.append(pool.spawn(obtener_cantidad_marcaciones_dispositivo, info_device))
+                try:
+                    gt.append(pool.spawn(obtener_cantidad_marcaciones_dispositivo, info_device))
+                except Exception as e:
+                    pass
                 info_devices_active.append(info_device)
 
         for info_device_active, g in zip(info_devices_active, gt): 

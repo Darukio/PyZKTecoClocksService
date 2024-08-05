@@ -36,7 +36,7 @@ def actualizar_hora_dispositivos(desde_thread = False):
 
     if info_devices:
         gt = []
-        config.read('config.ini')
+        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         # Crea un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
@@ -46,7 +46,10 @@ def actualizar_hora_dispositivos(desde_thread = False):
             if eval(info_device["activo"]) or desde_thread:
                 logging.debug(info_device)
                 # Lanza una corutina para cada dispositivo activo
-                gt.append(pool.spawn(actualizar_hora_dispositivo, info_device))
+                try:
+                    gt.append(pool.spawn(actualizar_hora_dispositivo, info_device))
+                except Exception as e:
+                    pass
         
         # Espera a que todas las corutinas en el pool hayan terminado
         for g in gt:
@@ -60,7 +63,6 @@ def actualizar_hora_dispositivos(desde_thread = False):
 
 def actualizar_hora_dispositivo(info_device):
     try:
-        logging.debug('HOLAA')
         reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370,))
     except IntentoConexionFallida as e:
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])

@@ -17,6 +17,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from ..utils.add_to_startup import *
 from ..utils.errors import *
 from ..utils.file_manager import *
 from ..business_logic.attendances_manager import *
@@ -28,11 +29,12 @@ import logging
 import os
 import time
 import schedule
+from ..utils.add_to_startup import is_startup_entry_exists
 from PyQt5.QtWidgets import QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
 from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal
 from .window_manager import DeviceStatusDialog, DeviceAttendancesCountDialog, DeviceAttendancesDialog, DeviceDialog
 
-config.read('config.ini')  # Lectura del archivo de configuración config.ini
+config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))  # Lectura del archivo de configuración config.ini
 
 class ScheduleThread(QThread):
     operation_running = pyqtSignal(bool)
@@ -48,7 +50,7 @@ class ScheduleThread(QThread):
             logging.debug('Hilo en ejecucion...')
             while self.is_running:
                 schedule.run_pending()
-                time.sleep(60)  # Simular trabajo
+                time.sleep(60)
         except Exception as e:
             logging.error(e)
 
@@ -61,11 +63,13 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.is_running = False  # Variable para indicar si la aplicación está corriendo
         self.schedule_thread = None  # Hilo para ejecutar tareas programadas
-        self.checked = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
+        logging.debug(config)
+        self.checked_clear_attendance = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
+        self.checked_automatic_init = is_startup_entry_exists()
 
         self.tray_icon = None  # Variable para almacenar el QSystemTrayIcon
         self.__init_ui()  # Inicialización de la interfaz de usuario
-        configurar_schedule()  # Configuración de las tareas programadas
+        self.configurar_schedule()  # Configuración de las tareas programadas
 
         self.__opt_start_execution()
 
@@ -102,9 +106,17 @@ class MainWindow(QMainWindow):
             # Checkbox como QAction con estado verificable
             clear_attendance_action = QAction("Eliminar marcaciones", menu)
             clear_attendance_action.setCheckable(True)  # Hacer el QAction verificable
-            clear_attendance_action.setChecked(self.checked)  # Establecer estado inicial del checkbox
+            clear_attendance_action.setChecked(self.checked_clear_attendance)  # Establecer estado inicial del checkbox
             clear_attendance_action.triggered.connect(self.__opt_toggle_checkbox_clear_attendance)  # Conectar acción de cambiar estado del checkbox
             menu.addAction(clear_attendance_action)  # Agregar acción al menú
+
+            logging.debug(f'checked_automatic_init: {self.checked_automatic_init}')
+            # Acción para alternar el estado del checkbox
+            automatic_init_action = QAction('Iniciar automáticamente', menu)
+            automatic_init_action.setCheckable(True)
+            automatic_init_action.setChecked(self.checked_automatic_init)
+            automatic_init_action.triggered.connect(self.__opt_toggle_checkbox_automatic_init)
+            menu.addAction(automatic_init_action)
 
             menu.addAction(self.__create_action("Salir", lambda: self.__opt_exit_icon()))  # Acción para salir de la aplicación
             self.tray_icon.setContextMenu(menu)  # Asignar menú contextual al ícono
@@ -302,13 +314,30 @@ class MainWindow(QMainWindow):
         """
         Opción para alternar el estado del checkbox de eliminar marcaciones.
         """
-        self.checked = not self.checked  # Invertir el estado actual del checkbox
-        logging.debug(f"Status checkbox: {self.checked}")  # Registro de depuración: estado actual del checkbox
+        self.checked_clear_attendance = not self.checked_clear_attendance  # Invertir el estado actual del checkbox
+        logging.debug(f"Status checkbox: {self.checked_clear_attendance}")  # Registro de depuración: estado actual del checkbox
         # Modificar el valor del campo deseado en el archivo de configuración
-        config['Device_config']['clear_attendance'] = str(self.checked)
+        config['Device_config']['clear_attendance'] = str(self.checked_clear_attendance)
         # Escribir los cambios de vuelta al archivo de configuración
         with open('config.ini', 'w') as config_file:
             config.write(config_file)
+
+    @pyqtSlot()
+    def __opt_toggle_checkbox_automatic_init(self):
+        """
+        Opción para alternar el estado del checkbox de ejecutar al inicio.
+        """
+        import sys
+        if getattr(sys, 'frozen', False):
+            self.checked_automatic_init = not self.checked_automatic_init  # Invertir el estado actual del checkbox
+            logging.debug(f"Status checkbox: {self.checked_automatic_init}")  # Registro de depuración: estado actual del checkbox
+
+            if self.checked_automatic_init:
+                logging.debug('add_to_startup')
+                add_to_startup()
+            else:
+                logging.debug('remove_from_startup')
+                remove_from_startup()
 
     @pyqtSlot()
     def __opt_exit_icon(self):
@@ -322,42 +351,58 @@ class MainWindow(QMainWindow):
             self.tray_icon.hide()  # Ocultar el ícono en la bandeja del sistema
             QApplication.quit()  # Salir de la aplicación
 
-def configurar_schedule():
-    '''
-    Configurar las tareas programadas en base a las horas cargadas desde el archivo.
-    '''
-    # Ruta del archivo de texto que contiene las horas de ejecución
-    file_path = os.path.join(encontrar_directorio_raiz(), 'schedule.txt')
-    logging.debug(file_path)
+    def configurar_schedule(self):
+        '''
+        Configurar las tareas programadas en base a las horas cargadas desde el archivo.
+        '''
+        # Ruta del archivo de texto que contiene las horas de ejecución
+        file_path = os.path.join(encontrar_directorio_raiz(), 'schedule.txt')
+        logging.debug(file_path)
 
-    try:
-        content = cargar_desde_archivo(file_path)  # Cargar contenido desde el archivo
-    except Exception as e:
-        logging.error(e)  # Registro de error si falla la operación
-        return
+        try:
+            content = cargar_desde_archivo(file_path)  # Cargar contenido desde el archivo
+        except Exception as e:
+            logging.error(e)  # Registro de error si falla la operación
+            return
 
-    gestionar_hours = []
-    actualizar_hours = []
-    current_task = None
+        gestionar_hours = []
+        actualizar_hours = []
+        current_task = None
 
-    for line in content:
-        if line.startswith("#"):
-            if "gestionar_marcaciones_dispositivos" in line:
-                current_task = "gestionar"
-            elif "actualizar_hora_dispositivos" in line:
-                current_task = "actualizar"
-        elif line:
-            if current_task == "gestionar":
-                gestionar_hours.append(line)
-            elif current_task == "actualizar":
-                actualizar_hours.append(line)
+        for line in content:
+            if line.startswith("#"):
+                if "gestionar_marcaciones_dispositivos" in line:
+                    current_task = "gestionar"
+                elif "actualizar_hora_dispositivos" in line:
+                    current_task = "actualizar"
+            elif line:
+                if current_task == "gestionar":
+                    gestionar_hours.append(line)
+                elif current_task == "actualizar":
+                    actualizar_hours.append(line)
 
-    if gestionar_hours:
-        # Iterar las horas de ejecución para gestionar_marcaciones_dispositivos
-        for hour_to_perform in gestionar_hours:
-            schedule.every().day.at(hour_to_perform).do(gestionar_marcaciones_dispositivos, desde_thread = True)
+        if gestionar_hours:
+            # Iterar las horas de ejecución para gestionar_marcaciones_dispositivos
+            for hour_to_perform in gestionar_hours:
+                schedule.every().day.at(hour_to_perform).do(self.thread_gestionar_marcaciones_dispositivos)
 
-    if actualizar_hours:
-        # Iterar las horas de ejecución para actualizar_hora_dispositivos
-        for hour_to_perform in actualizar_hours:
-            schedule.every().day.at(hour_to_perform).do(actualizar_hora_dispositivos, desde_thread = True)
+        if actualizar_hours:
+            # Iterar las horas de ejecución para actualizar_hora_dispositivos
+            for hour_to_perform in actualizar_hours:
+                schedule.every().day.at(hour_to_perform).do(self.thread_actualizar_hora_dispositivos)
+
+    def thread_gestionar_marcaciones_dispositivos(self):
+        self.__set_icon_color(self.tray_icon, "yellow")
+        try:
+            gestionar_marcaciones_dispositivos(desde_thread=True)
+        except Exception as e:
+            logging.critical(e)
+        self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
+
+    def thread_actualizar_hora_dispositivos(self):
+        self.__set_icon_color(self.tray_icon, "yellow")
+        try:
+            actualizar_hora_dispositivos(desde_thread=True)
+        except Exception as e:
+            logging.critical(e)
+        self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución

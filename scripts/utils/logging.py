@@ -19,25 +19,32 @@
 
 import os
 import logging
+import sys
+from .file_manager import *
 
-# Crear la carpeta logs si no existe
-if not os.path.exists('logs'):
-    os.makedirs('logs')
+def config_log():
+    logs_folder = os.path.join(encontrar_directorio_raiz(), 'logs')
 
-# Configurar el sistema de registros básico para program_debug.log
-logging.basicConfig(filename='logs/program_debug.log', level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+    # Crear la carpeta logs si no existe
+    if not os.path.exists(logs_folder):
+        os.makedirs(logs_folder)
 
-# Configurar un controlador adicional para los niveles de warning, error y critical en program_error.log
-error_logger = logging.FileHandler('logs/program_error.log')
-error_logger.setLevel(logging.WARNING)
+    debug_log_file = os.path.join(logs_folder, 'program_debug.log')
+    # Configurar el sistema de registros básico para program_debug.log
+    logging.basicConfig(filename=debug_log_file, level=logging.DEBUG,
+                        format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Definir un formato para el controlador adicional
-error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-error_logger.setFormatter(error_formatter)
+    # Configurar un controlador adicional para 'program_error.log'
+    error_log_file = os.path.join(logs_folder, 'program_error.log')
+    error_logger = logging.FileHandler(error_log_file)
+    error_logger.setLevel(logging.WARNING)
 
-# Agregar el controlador adicional al sistema de registros
-logging.getLogger().addHandler(error_logger)
+    # Definir un formato para el controlador adicional
+    error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    error_logger.setFormatter(error_formatter)
+
+    # Agregar el controlador adicional al sistema de registros
+    logging.getLogger().addHandler(error_logger)
 
 # Ejemplos de registros
 # logging.debug('Este es un mensaje de depuración')
