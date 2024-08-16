@@ -26,10 +26,11 @@ from datetime import datetime
 from zk import ZK, ZK_helper
 from scripts import config
 
-def conectar(ip, port):
+def conectar(ip, port, communication):
     conn = None
     try:
-        zk = ZK(ip, port, ommit_ping=True)
+        p_force_udp = True if communication == 'UDP' else False
+        zk = ZK(ip, port, ommit_ping=True, force_udp=p_force_udp)
         logging.info(f'Connecting to device {ip}...')
         conn = zk.connect()
         #logging.info('Disabling device...')
@@ -55,7 +56,7 @@ def ping_device(ip, port):
         logging.error(e)
         return False
     
-def finalizar_conexion(conn, ip, port):
+def finalizar_conexion(conn, ip, port, communication):
     #logging.info('Enabling device...')
     #conn.enable_device()
     try:
@@ -118,6 +119,14 @@ def obtener_marcaciones(conn, desde_thread):
         if records != len(attendances):
             raise Exception('Records mismatch')
         else:
+            import time
+            time.sleep(20)
+            conn.get_attendance()
+            new_records = conn.records
+            logging.debug(f'{ip} - Length of attendances last conn: {new_records}, Length of attendances old conn: {records}')
+            if new_records != records:
+                raise Exception('Records mismatch')
+
             config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
             # Determina la configuración adecuada según el valor de desde_thread
             config_key = 'clear_attendance_thread' if desde_thread else 'clear_attendance'

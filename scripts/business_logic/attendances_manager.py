@@ -82,7 +82,7 @@ def gestionar_marcaciones_dispositivos(desde_thread = False):
 
 def gestionar_marcaciones_dispositivo(info_device, p_desde_thread):
     try:
-        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370,), desde_thread=p_desde_thread)
+        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370, info_device['communication'],), desde_thread=p_desde_thread)
         attendances = format_attendances(attendances, info_device["id"])
         logging.info(f'{info_device["ip"]} - Length attendances: {len(attendances)} - Attendances: {attendances}')
         
@@ -102,15 +102,34 @@ def gestionar_marcaciones_dispositivo(info_device, p_desde_thread):
 
     return len(attendances)
 
+# Definir el mapeo de transformación
+config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
+attendance_status_dictionary = {
+    1: config['Attendance_status']['status_fingerprint'],
+    15: config['Attendance_status']['status_face'],
+    0: config['Attendance_status']['status_card'],
+    2: config['Attendance_status']['status_card'],
+    4: config['Attendance_status']['status_card'],
+}
+
+# Función que aplica la transformación según el diccionario
+def maping_dictionary(number):
+    # Si el número está en el diccionario, retornar el valor transformado
+    if number in attendance_status_dictionary:
+        return attendance_status_dictionary[number]
+    # Opcional: Manejar casos no especificados
+    else:
+        return 0
+
 def format_attendances(attendances, id):
     formatted_attendances = []
     for attendance in attendances:
         formatted_timestamp = attendance.timestamp.strftime("%d/%m/%Y %H:%M") # Formatea el timestamp a DD/MM/YYYY hh:mm, ejemplo: 21/07/2023 05:28
         attendance_formatted = {
-            "user_id": attendance.user_id,
+            "user_id": str(attendance.user_id).zfill(9),
             "timestamp": formatted_timestamp,
             "id": id,
-            "status": attendance.status
+            "status": maping_dictionary(int(attendance.status)),
         }
         formatted_attendances.append(attendance_formatted)
     return formatted_attendances
@@ -185,7 +204,7 @@ def obtener_cantidad_marcaciones_dispositivos(progress_callback=None):
 
 def obtener_cantidad_marcaciones_dispositivo(info_device):
     try:
-        records = reintentar_operacion_de_red(obtener_cantidad_marcaciones, args=(info_device["ip"], 4370,))
+        records = reintentar_operacion_de_red(obtener_cantidad_marcaciones, args=(info_device["ip"], 4370, info_device['communication'],))
         logging.debug(f'IP: {info_device["ip"]} - Records: {records}')
         return records
     except IntentoConexionFallida as e:

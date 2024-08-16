@@ -24,7 +24,7 @@ from ..business_logic.hour_manager import *
 from ..business_logic.device_manager import ping_devices  # Importa la función para hacer ping a dispositivos
 from scripts import config
 
-from PyQt5.QtWidgets import QApplication, QDialog, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QSpacerItem, QSizePolicy, QHeaderView, QLabel, QWidget, QCheckBox, QHBoxLayout, QMessageBox, QFormLayout, QLineEdit
+from PyQt5.QtWidgets import QApplication, QComboBox, QStyledItemDelegate, QDialog, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QSpacerItem, QSizePolicy, QHeaderView, QLabel, QWidget, QCheckBox, QHBoxLayout, QMessageBox, QFormLayout, QLineEdit
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon
 import logging
@@ -93,7 +93,7 @@ class DeviceDialogBase(QDialog):
         self.label_actualizando.setVisible(False)
         layout.addWidget(self.label_actualizando)
 
-        self.label_no_fallido = QLabel("Error", self)
+        self.label_no_fallido = QLabel("No hay dispositivo activo", self)
         self.label_no_fallido.setAlignment(Qt.AlignCenter)
         self.label_no_fallido.setVisible(False)
         layout.addWidget(self.label_no_fallido)
@@ -153,7 +153,24 @@ class DeviceAttendancesDialog(DeviceDialogBase):
     def __init__(self, parent=None):
         header_labels = ["IP", "Punto de Marcación", "Nombre de Distrito", "ID", "Cant. de Marcaciones"]
         super().__init__(parent, gestionar_marcaciones_dispositivos, "Obtener marcaciones", header_labels)
-        self.__add_btn_retry_connection()
+        self.__init_ui_son()
+
+    def __init_ui_son(self):
+        button_layout = QHBoxLayout()
+
+        self.btn_retry_all_connection = QPushButton("Reintentar todos", self)
+        self.btn_retry_all_connection.clicked.connect(self.on_retry_all_connection_clicked)
+        button_layout.addWidget(self.btn_retry_all_connection)
+        self.btn_retry_all_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+
+        self.btn_retry_failed_connection = QPushButton("Reintentar fallidos", self)
+        self.btn_retry_failed_connection.clicked.connect(self.on_retry_failed_connection_clicked)
+        button_layout.addWidget(self.btn_retry_failed_connection)
+        self.btn_retry_failed_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+
+        self.layout().addLayout(button_layout)
+
+        self.setLayout(self.layout())
 
         self.label_total_marcaciones = QLabel("Total de Marcaciones: 0", self)
         self.label_total_marcaciones.setAlignment(Qt.AlignCenter)
@@ -163,19 +180,19 @@ class DeviceAttendancesDialog(DeviceDialogBase):
     def update_table(self, device_status=None):
         self.total_marcaciones = 0
         super().update_table(device_status)
-        self.show_btn_retry_connection()
+        self.show_btn_retry_failed_connection()
         self.label_total_marcaciones.setText(f"Total de Marcaciones: {self.total_marcaciones}")
         self.label_total_marcaciones.setVisible(True)
 
-    def __add_btn_retry_connection(self):
-        self.btn_retry_connection = QPushButton("Reintentar conexión", self)
-        self.btn_retry_connection.clicked.connect(self.on_retry_connection_clicked)
-        self.layout().addWidget(self.btn_retry_connection, alignment=Qt.AlignCenter)
-        self.btn_retry_connection.setVisible(False)  # Ocultar el botón después de hacer clic
-
-    def show_btn_retry_connection(self):
-        self.btn_retry_connection.setVisible(True)
+    def show_btn_retry_failed_connection(self):
         self.btn_actualizar.setVisible(False)
+        self.btn_retry_all_connection.setVisible(True)
+        
+        has_failed_connection = any(
+            device["cant_marcaciones"] == "Conexión fallida" for device in self.op_thread.result.values()
+            )
+        if has_failed_connection:
+            self.btn_retry_failed_connection.setVisible(True)
 
     def update_last_column(self, row, device_info):
         status_item = QTableWidgetItem(device_info.get("cant_marcaciones", ""))
@@ -191,7 +208,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
         except ValueError:
             pass
     
-    def on_retry_connection_clicked(self):
+    def on_retry_all_connection_clicked(self):
         self.label_total_marcaciones.setVisible(False)
 
         try:
@@ -202,10 +219,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
             for line in lines:
                 parts = line.strip().split(' - ')
                 ip = parts[3]
-                if ip in self.op_thread.result and self.op_thread.result[ip]["cant_marcaciones"] == "Conexión fallida":
-                    parts[5] = "True"
-                else:
-                    parts[5] = "False"
+                parts[6] = "True"
                 new_lines.append(' - '.join(parts) + '\n')
 
             with open('info_devices.txt', 'w') as file:
@@ -217,8 +231,58 @@ class DeviceAttendancesDialog(DeviceDialogBase):
         except Exception as e:
             logging.error(f"Error al actualizar el estado activo: {e}")
     
-        self.btn_retry_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+        self.btn_retry_failed_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+        self.btn_retry_all_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+    
+    def on_retry_failed_connection_clicked(self):
+        self.label_total_marcaciones.setVisible(False)
 
+        try:
+            with open('info_devices.txt', 'r') as file:
+                lines = file.readlines()
+
+            new_lines = []
+            for line in lines:
+                parts = line.strip().split(' - ')
+                ip = parts[3]
+                if ip in self.op_thread.result and self.op_thread.result[ip]["cant_marcaciones"] == "Conexión fallida":
+                    parts[6] = "True"
+                else:
+                    parts[6] = "False"
+                new_lines.append(' - '.join(parts) + '\n')
+
+            with open('info_devices.txt', 'w') as file:
+                file.writelines(new_lines)
+
+            logging.debug("Estado activo actualizado correctamente.")
+
+            self.update_data()
+        except Exception as e:
+            logging.error(f"Error al actualizar el estado activo: {e}")
+    
+        self.btn_retry_all_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+        self.btn_retry_failed_connection.setVisible(False)  # Ocultar el botón después de hacer clic
+
+class ComboBoxDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def createEditor(self, parent, option, index):
+        # Crear y configurar un nuevo QComboBox para la celda
+        combo_box = QComboBox(parent)
+        combo_box.addItem("UDP")
+        combo_box.addItem("TCP")
+        return combo_box
+
+    def setEditorData(self, editor, index):
+        # Establecer el valor del QComboBox según los datos del modelo
+        value = index.data()
+        if value is not None:
+            editor.setCurrentText(value)
+
+    def setModelData(self, editor, model, index):
+        # Guardar el valor seleccionado del QComboBox en el modelo
+        model.setData(index, editor.currentText())
 
 # Subclase para el diálogo de cantidad de marcaciones
 class DeviceAttendancesCountDialog(DeviceDialogBase):
@@ -253,8 +317,8 @@ class DeviceDialog(QDialog):
         layout = QVBoxLayout(self)
 
         self.table_widget = QTableWidget()
-        self.table_widget.setColumnCount(6)
-        self.table_widget.setHorizontalHeaderLabels(["Distrito", "Modelo", "Punto de Marcación", "IP", "ID", "Activado"])
+        self.table_widget.setColumnCount(7)
+        self.table_widget.setHorizontalHeaderLabels(["Distrito", "Modelo", "Punto de Marcación", "IP", "ID", "Comunicación", "Activado"])
         self.table_widget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table_widget.horizontalHeader().setStretchLastSection(True)
         self.table_widget.setEditTriggers(QTableWidget.DoubleClicked)
@@ -304,12 +368,12 @@ class DeviceDialog(QDialog):
     # Métodos para la lógica de selección y deselección de casillas "Activo"
     def activate_all(self):
         for row in range(self.table_widget.rowCount()):
-            checkbox_delegate = self.table_widget.cellWidget(row, 5)
+            checkbox_delegate = self.table_widget.cellWidget(row, 6)
             checkbox_delegate.setChecked(True)
 
     def deactivate_all(self):
         for row in range(self.table_widget.rowCount()):
-            checkbox_delegate = self.table_widget.cellWidget(row, 5)
+            checkbox_delegate = self.table_widget.cellWidget(row, 6)
             checkbox_delegate.setChecked(False)
 
     def add_device(self):
@@ -331,26 +395,32 @@ class DeviceDialog(QDialog):
             with open(self.file_path, 'r') as file:
                 for line in file:
                     parts = line.strip().split(' - ')
-                    if len(parts) == 6:
-                        distrito, modelo, punto_marcacion, ip, id, activado = parts
+                    if len(parts) == 7:
+                        distrito, modelo, punto_marcacion, ip, id, comunicacion, activado = parts
                         self.max_id = max(self.max_id, int(id))  # Update max_id
-                        data.append((distrito, modelo, punto_marcacion, ip, id, activado == 'True'))
+                        data.append((distrito, modelo, punto_marcacion, ip, id, comunicacion, activado == 'True'))
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al cargar datos: {e}")
         return data
 
     def load_data_into_table(self):
         self.table_widget.setRowCount(0)
-        for row, (distrito, modelo, punto_marcacion, ip, id, activado) in enumerate(self.data):
+        for row, (distrito, modelo, punto_marcacion, ip, id, comunicacion, activado) in enumerate(self.data):
             self.table_widget.insertRow(row)
             self.table_widget.setItem(row, 0, QTableWidgetItem(distrito))
             self.table_widget.setItem(row, 1, QTableWidgetItem(modelo))
             self.table_widget.setItem(row, 2, QTableWidgetItem(punto_marcacion))
             self.table_widget.setItem(row, 3, QTableWidgetItem(ip))
             self.table_widget.setItem(row, 4, QTableWidgetItem(str(id)))
+            # Configurar ComboBoxDelegate para la columna 5
+            combo_box_delegate = ComboBoxDelegate(self.table_widget)
+            self.table_widget.setItemDelegateForColumn(5, combo_box_delegate)
+            # Establecer el valor en el modelo para la columna 5
+            self.table_widget.setItem(row, 5, QTableWidgetItem(comunicacion))
+            # Configurar CheckBoxDelegate para la columna 6
             checkbox_delegate = CheckBoxDelegate()
             checkbox_delegate.setChecked(activado)
-            self.table_widget.setCellWidget(row, 5, checkbox_delegate)
+            self.table_widget.setCellWidget(row, 6, checkbox_delegate)
 
     def save_data(self):
         try:
@@ -361,9 +431,10 @@ class DeviceDialog(QDialog):
                     punto_marcacion = self.table_widget.item(row, 2).text().upper()
                     ip = self.table_widget.item(row, 3).text()
                     id = self.table_widget.item(row, 4).text()
-                    activado = self.table_widget.cellWidget(row, 5).isChecked()
-                    logging.debug(f"{distrito} - {modelo} - {punto_marcacion} - {ip} - {id} - {activado}")
-                    file.write(f"{distrito} - {modelo} - {punto_marcacion} - {ip} - {id} - {activado}\n")
+                    comunicacion = self.table_widget.item(row, 5).text()
+                    activado = self.table_widget.cellWidget(row, 6).isChecked()
+                    logging.debug(f"{distrito} - {modelo} - {punto_marcacion} - {ip} - {id} - {comunicacion} - {activado}")
+                    file.write(f"{distrito} - {modelo} - {punto_marcacion} - {ip} - {id} - {comunicacion} - {activado}\n")
             QMessageBox.information(self, "Éxito", "Datos guardados correctamente.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al guardar datos: {e}")
@@ -401,12 +472,20 @@ class AddDeviceDialog(QDialog):
         self.modelo_edit = QLineEdit(self)
         self.punto_marcacion_edit = QLineEdit(self)
         self.ip_edit = QLineEdit(self)
+        # Crear un QComboBox
+        self.combo_box = QComboBox()
+        # Agregar elementos al QComboBox
+        self.combo_box.addItem("TCP")
+        self.combo_box.addItem("UDP")
+        # Conectar la señal del QComboBox a un slot
+        self.combo_box.currentIndexChanged.connect(self.on_combobox_changed)
         self.activado = True
 
         form_layout.addRow("Distrito:", self.distrito_edit)
         form_layout.addRow("Modelo:", self.modelo_edit)
         form_layout.addRow("Punto de Marcación:", self.punto_marcacion_edit)
         form_layout.addRow("IP:", self.ip_edit)
+        form_layout.addRow("Comunicación:", self.combo_box)
 
         layout.addLayout(form_layout)
 
@@ -415,6 +494,10 @@ class AddDeviceDialog(QDialog):
         layout.addWidget(self.btn_add)
 
         self.setLayout(layout)
+        
+    def on_combobox_changed(self, index):
+        # Obtener el texto de la opción seleccionada
+        self.comunicacion = self.combo_box.currentText()
 
     def get_data(self):
         return (
@@ -423,5 +506,6 @@ class AddDeviceDialog(QDialog):
             self.punto_marcacion_edit.text().upper(),
             self.ip_edit.text(),
             self.id,
+            self.comunicacion,
             self.activado
         )

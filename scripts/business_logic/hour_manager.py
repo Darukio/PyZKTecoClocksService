@@ -63,7 +63,7 @@ def actualizar_hora_dispositivos(desde_thread = False):
 
 def actualizar_hora_dispositivo(info_device):
     try:
-        reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370,))
+        reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370, info_device['communication'],))
     except IntentoConexionFallida as e:
         raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
     except HoraValidacionFallida as e:

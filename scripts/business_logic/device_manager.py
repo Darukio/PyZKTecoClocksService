@@ -32,7 +32,7 @@ def organizar_info_dispositivos(line):
     parts = line.strip().split(" - ")
     logging.debug(parts)
     # Verificar que hay exactamente 6 partes en la línea
-    if len(parts) == 6:
+    if len(parts) == 7:
         # Retorna un objeto con atributos
         return {
             "nombre_distrito": parts[0],
@@ -40,7 +40,8 @@ def organizar_info_dispositivos(line):
             "punto_marcacion": parts[2],
             "ip": parts[3],
             "id": parts[4],
-            "activo": parts[5]
+            "communication": parts[5],
+            "activo": parts[6]
         }
     else:
         # Si no hay exactamente 6 partes, retornar None
