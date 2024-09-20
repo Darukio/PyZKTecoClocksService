@@ -27,8 +27,36 @@ from .device_manager import *
 from .hour_manager import actualizar_hora_dispositivo
 from datetime import datetime
 import os
+import threading
+import eventlet
+from eventlet.green import threading
+import logging
 
-def gestionar_marcaciones_dispositivos(desde_thread = False):
+class SharedState:
+    def __init__(self):
+        self.total_devices = 0
+        self.processed_devices = 0
+        self.lock = threading.Lock()
+
+    def increment_processed_devices(self):
+        with self.lock:
+            self.processed_devices += 1
+            return self.processed_devices
+
+    def calculate_progress(self):
+        with self.lock:
+            if self.total_devices > 0:
+                return int((self.processed_devices / self.total_devices) * 100)
+            return 0
+
+    def set_total_devices(self, total):
+        with self.lock:
+            self.total_devices = total
+
+    def get_total_devices(self):
+        return self.total_devices
+
+def gestionar_marcaciones_dispositivos(desde_thread = False, emit_progress = None):
     logging.debug(f'desde_thread = {desde_thread}')
     info_devices = []
     try:
@@ -47,16 +75,23 @@ def gestionar_marcaciones_dispositivos(desde_thread = False):
 
         # Crea un pool de green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
+        state = SharedState()
+
         for info_device in info_devices:
-            logging.debug(f'info_device["activo"]: {eval(info_device["activo"])} desde_thread: {desde_thread}')
+            logging.debug(f'info_device["activo"]: {eval(info_device["activo"])} - desde_thread: {desde_thread}')
             if eval(info_device["activo"]) or desde_thread:
                 logging.debug(f'info_device_active: {info_device}')
-                try:
-                    gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device, desde_thread))
-                except Exception as e:
-                    logging.error(f'Error in coroutine with {info_device["ip"]}')
                 info_devices_active.append(info_device)
 
+        # Establece el total de dispositivos en el estado compartido
+        state.set_total_devices(len(info_devices_active))
+                
+        for info_device_active in info_devices_active:
+            try:
+                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device_active, desde_thread, emit_progress, state))
+            except Exception as e:
+                pass
+        
         for info_device_active, g in zip(info_devices_active, gt):
             logging.debug(f'Processing {info_device_active}')
             try:
@@ -80,27 +115,40 @@ def gestionar_marcaciones_dispositivos(desde_thread = False):
 
     return results
 
-def gestionar_marcaciones_dispositivo(info_device, p_desde_thread):
+def gestionar_marcaciones_dispositivo(info_device, p_desde_thread, emit_progress, state):
     try:
-        attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370, info_device['communication'],), desde_thread=p_desde_thread)
-        attendances = format_attendances(attendances, info_device["id"])
-        logging.info(f'{info_device["ip"]} - Length attendances: {len(attendances)} - Attendances: {attendances}')
-        
-        gestionar_marcaciones_individual(info_device, attendances)
-        gestionar_marcaciones_global(attendances)
-    except IntentoConexionFallida as e:
-        logging.debug(f'ConexionFallida {info_device["ip"]}')
-        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
+        try:
+            attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370, info_device['communication'],), desde_thread=p_desde_thread)
+            attendances = format_attendances(attendances, info_device["id"])
+            logging.info(f'{info_device["ip"]} - Length attendances: {len(attendances)} - Attendances: {attendances}')
+            
+            gestionar_marcaciones_individual(info_device, attendances)
+            gestionar_marcaciones_global(attendances)
+        except IntentoConexionFallida as e:
+            logging.debug(f'ConexionFallida {info_device["ip"]}')
+            raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
+        except Exception as e:
+            raise e
+
+        try:
+            actualizar_hora_dispositivo(info_device)
+        except Exception as e:
+            logging.error(e)
+
+        logging.debug(f'TERMINANDO MARCACIONES DISP {info_device["ip"]}')
+        return len(attendances)
     except Exception as e:
         raise e
-    try:
-        actualizar_hora_dispositivo(info_device)
-    except Exception as e:
-        logging.error(e)
-
-    logging.debug(f'TERMINANDO MARCACIONES DISP {info_device["ip"]}')
-
-    return len(attendances)
+    finally:
+        try:
+            # Actualiza el número de dispositivos procesados y el progreso
+            processed_devices = state.increment_processed_devices()
+            if emit_progress:
+                progress = state.calculate_progress()
+                emit_progress(percent_progress=progress, device_progress=info_device["ip"], processed_devices=processed_devices, total_devices=state.get_total_devices())
+                logging.debug(f"processed_devices: {processed_devices}/{state.get_total_devices()}, progress: {progress}%")
+        except Exception as e:
+            logging.error(e)
 
 # Definir el mapeo de transformación
 config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))

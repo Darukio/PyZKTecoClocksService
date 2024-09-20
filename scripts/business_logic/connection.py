@@ -112,21 +112,23 @@ def obtener_marcaciones(conn, desde_thread):
 
     try:
         logging.info(f'{ip} - Getting attendances...')
+        import time
+        tiempo_inicial = time.time()
         attendances = conn.get_attendance()
+        tiempo_final = time.time()
+        logging.debug(f'{ip} - Ending attendances operation - Time operation: {tiempo_final - tiempo_inicial} - Time ending: {tiempo_final}')
         records = conn.records
-        eventlet.sleep(0)
         logging.debug(f'{ip} - Length of attendances from device: {records}, Length of attendances: {len(attendances)}')
         if records != len(attendances):
             raise Exception('Records mismatch')
         else:
-            import time
-            time.sleep(20)
             conn.get_attendance()
             new_records = conn.records
             logging.debug(f'{ip} - Length of attendances last conn: {new_records}, Length of attendances old conn: {records}')
             if new_records != records:
                 raise Exception('Records mismatch')
 
+            tiempo_inicial_2 = time.time()
             config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
             # Determina la configuración adecuada según el valor de desde_thread
             config_key = 'clear_attendance_thread' if desde_thread else 'clear_attendance'
@@ -136,6 +138,8 @@ def obtener_marcaciones(conn, desde_thread):
             if eval(config['Device_config'][config_key]):
                 logging.debug(f'{ip} - Clearing attendances...')
                 try:
+                    tiempo_final_2 = time.time()
+                    logging.debug(f'{ip} - Ending clear attendances operation - Time operation: {tiempo_final_2 - tiempo_inicial_2} - Time ending: {tiempo_final_2}')
                     conn.clear_attendance()
                     eventlet.sleep(0)
                 except Exception as e:

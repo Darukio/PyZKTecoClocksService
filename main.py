@@ -29,7 +29,7 @@ import configparser
 import threading
 
 # Versión del programa
-VERSION = "v1.0.1"
+VERSION = "v1.1.4"
 
 # Para leer un archivo INI
 from scripts import config

@@ -24,7 +24,7 @@ from ..business_logic.hour_manager import *
 from ..business_logic.device_manager import ping_devices  # Importa la función para hacer ping a dispositivos
 from scripts import config
 
-from PyQt5.QtWidgets import QApplication, QComboBox, QStyledItemDelegate, QDialog, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QSpacerItem, QSizePolicy, QHeaderView, QLabel, QWidget, QCheckBox, QHBoxLayout, QMessageBox, QFormLayout, QLineEdit
+from PyQt5.QtWidgets import QApplication, QProgressBar, QComboBox, QStyledItemDelegate, QDialog, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QSpacerItem, QSizePolicy, QHeaderView, QLabel, QWidget, QCheckBox, QHBoxLayout, QMessageBox, QFormLayout, QLineEdit
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QColor, QIcon
 import logging
@@ -34,6 +34,7 @@ import sys
 class OpThread(QThread):
     op_updated = pyqtSignal(dict)
     op_terminated = pyqtSignal(float)
+    progress_updated = pyqtSignal(int, str, int, int)  # Señal para el progreso
 
     def __init__(self, op_func, parent=None):
         super().__init__(parent)
@@ -43,11 +44,15 @@ class OpThread(QThread):
         try:
             import time
             tiempo_inicial = time.time()
-            self.result = self.op_func()
+            self.result = self.op_func(emit_progress=self.emit_progress)
             self.op_updated.emit(self.result)
             self.op_terminated.emit(tiempo_inicial)
         except Exception as e:
             logging.critical(e)
+
+    def emit_progress(self, percent_progress = None, device_progress = None, processed_devices = None, total_devices = None):
+        self.progress_updated.emit(percent_progress, device_progress, processed_devices, total_devices)  # Emitir la señal de progreso
+
 
 # Definición de la clase base común
 class DeviceDialogBase(QDialog):
@@ -98,15 +103,27 @@ class DeviceDialogBase(QDialog):
         self.label_no_fallido.setVisible(False)
         layout.addWidget(self.label_no_fallido)
 
+        # Barra de progreso
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setVisible(False)  # Oculta la barra de progreso inicialmente
+        layout.addWidget(self.progress_bar)
+
     def update_data(self):
         self.label_no_fallido.setVisible(False)
+        self.btn_actualizar.setVisible(False)
         self.label_actualizando.setVisible(True)
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
         self.table_widget.setSortingEnabled(False)
         self.table_widget.setRowCount(0)
         self.op_thread.start()
 
     def update_table(self, device_status=None):
         self.label_actualizando.setVisible(False)
+        self.progress_bar.setVisible(False)  # Ocultar la barra de progreso cuando la actualización esté completa
         logging.debug(device_status)
 
         if not device_status:
@@ -154,6 +171,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
         header_labels = ["IP", "Punto de Marcación", "Nombre de Distrito", "ID", "Cant. de Marcaciones"]
         super().__init__(parent, gestionar_marcaciones_dispositivos, "Obtener marcaciones", header_labels)
         self.__init_ui_son()
+        self.op_thread.progress_updated.connect(self.update_progress)  # Conectar la señal de progreso
 
     def __init_ui_son(self):
         button_layout = QHBoxLayout()
@@ -177,6 +195,11 @@ class DeviceAttendancesDialog(DeviceDialogBase):
         self.layout().addWidget(self.label_total_marcaciones)
         self.label_total_marcaciones.setVisible(False)
 
+    def update_progress(self, percent_progress, device_progress, processed_devices, total_devices):
+        if percent_progress and device_progress:
+            self.progress_bar.setValue(percent_progress)  # Actualizar el valor de la barra de progreso
+            self.label_actualizando.setText(f"Último intento de conexión: {device_progress}\n{processed_devices}/{total_devices} dispositivos")
+        
     def update_table(self, device_status=None):
         self.total_marcaciones = 0
         super().update_table(device_status)
@@ -185,7 +208,6 @@ class DeviceAttendancesDialog(DeviceDialogBase):
         self.label_total_marcaciones.setVisible(True)
 
     def show_btn_retry_failed_connection(self):
-        self.btn_actualizar.setVisible(False)
         self.btn_retry_all_connection.setVisible(True)
         
         has_failed_connection = any(
@@ -210,6 +232,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
     
     def on_retry_all_connection_clicked(self):
         self.label_total_marcaciones.setVisible(False)
+        self.label_actualizando.setText("Reintentando conexiones...")
 
         try:
             with open('info_devices.txt', 'r') as file:
@@ -236,6 +259,7 @@ class DeviceAttendancesDialog(DeviceDialogBase):
     
     def on_retry_failed_connection_clicked(self):
         self.label_total_marcaciones.setVisible(False)
+        self.label_actualizando.setText("Reintentando conexiones...")
 
         try:
             with open('info_devices.txt', 'r') as file:
