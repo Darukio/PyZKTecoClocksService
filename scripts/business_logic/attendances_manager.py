@@ -202,7 +202,7 @@ def gestionar_guardado_de_marcaciones(attendances, folder_path, file_name):
     logging.debug(f'destiny_path: {destiny_path}')
     guardar_marcaciones_en_archivo(attendances, destiny_path)
 
-def obtener_cantidad_marcaciones_dispositivos(progress_callback=None):
+def obtener_cantidad_marcaciones_dispositivos(emit_progress = None):
     info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada

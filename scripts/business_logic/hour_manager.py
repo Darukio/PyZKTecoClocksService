@@ -26,7 +26,7 @@ from scripts import config
 from .connection import *
 from .device_manager import *
 
-def actualizar_hora_dispositivos(desde_thread = False):
+def actualizar_hora_dispositivos(desde_thread = False, emit_progress = None):
     info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada

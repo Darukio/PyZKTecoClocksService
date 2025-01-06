@@ -66,7 +66,7 @@ def obtener_info_dispositivos():
         logging.debug(info_devices)
     return info_devices
 
-def ping_devices():
+def ping_devices(emit_progress = None):
     info_devices = None
     try:
         # Obtiene todos los dispositivos en una lista formateada
