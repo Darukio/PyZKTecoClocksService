@@ -49,7 +49,11 @@ class ScheduleThread(QThread):
         try:
             logging.debug('Hilo en ejecucion...')
             while self.is_running:
-                schedule.run_pending()
+                try:
+                    schedule.run_pending()
+                except Exception as task_error:
+                    logging.error(f"Error en la ejecución de una tarea programada: {task_error}")
+
                 time.sleep(60)
         except Exception as e:
             logging.error(e)
