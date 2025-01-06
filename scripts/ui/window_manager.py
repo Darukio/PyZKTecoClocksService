@@ -405,6 +405,7 @@ class DeviceDialog(QDialog):
         dialog = AddDeviceDialog(self, new_id)
         if dialog.exec() == QDialog.Accepted:
             new_device_data = dialog.get_data()
+            logging.debug(new_device_data)
             self.data.append(new_device_data)
             self.max_id = new_id  # Update max_id
             self.load_data_into_table()
@@ -503,6 +504,8 @@ class AddDeviceDialog(QDialog):
         self.combo_box.addItem("UDP")
         # Conectar la señal del QComboBox a un slot
         self.combo_box.currentIndexChanged.connect(self.on_combobox_changed)
+        self.comunicacion = self.combo_box.currentText()
+        
         self.activado = True
 
         form_layout.addRow("Distrito:", self.distrito_edit)
@@ -510,7 +513,7 @@ class AddDeviceDialog(QDialog):
         form_layout.addRow("Punto de Marcación:", self.punto_marcacion_edit)
         form_layout.addRow("IP:", self.ip_edit)
         form_layout.addRow("Comunicación:", self.combo_box)
-
+        
         layout.addLayout(form_layout)
 
         self.btn_add = QPushButton("Agregar", self)
@@ -522,6 +525,7 @@ class AddDeviceDialog(QDialog):
     def on_combobox_changed(self, index):
         # Obtener el texto de la opción seleccionada
         self.comunicacion = self.combo_box.currentText()
+        logging.debug(self.comunicacion)
 
     def get_data(self):
         return (
