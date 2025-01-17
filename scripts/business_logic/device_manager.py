@@ -115,7 +115,7 @@ def ping_devices(emit_progress = None):
 
     return results
 
-def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3, desde_thread = False):
+def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3, desde_service = False):
     config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
     intentos_maximos = int(config['Network_config']['retry_connection'])
     result = None
@@ -127,7 +127,7 @@ def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3, desd
             if conn is None:
                 conn = conectar(*args, **kwargs)
             logging.debug(f'{args} OPERATION!')
-            result = op(conn, desde_thread)
+            result = op(conn, desde_service)
             logging.debug(f'{args} ENDING!')
             finalizar_conexion(conn, *args)
             logging.debug(f'{args} ENDED!')

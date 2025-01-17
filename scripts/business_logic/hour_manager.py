@@ -26,7 +26,7 @@ from scripts import config
 from .connection import *
 from .device_manager import *
 
-def actualizar_hora_dispositivos(desde_thread = False, emit_progress = None):
+def actualizar_hora_dispositivos(desde_service = False, emit_progress = None):
     info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
@@ -43,7 +43,7 @@ def actualizar_hora_dispositivos(desde_thread = False, emit_progress = None):
         
         for info_device in info_devices:
             # Si el dispositivo se encuentra activo...
-            if eval(info_device["activo"]) or desde_thread:
+            if eval(info_device["activo"]) or desde_service:
                 logging.debug(info_device)
                 # Lanza una corutina para cada dispositivo activo
                 try:

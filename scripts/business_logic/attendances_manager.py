@@ -56,8 +56,8 @@ class SharedState:
     def get_total_devices(self):
         return self.total_devices
 
-def gestionar_marcaciones_dispositivos(desde_thread = False, emit_progress = None):
-    logging.debug(f'desde_thread = {desde_thread}')
+def gestionar_marcaciones_dispositivos(desde_service = False, emit_progress = None):
+    logging.debug(f'desde_service = {desde_service}')
     info_devices = []
     try:
         # Obtiene todos los dispositivos en una lista formateada
@@ -78,8 +78,8 @@ def gestionar_marcaciones_dispositivos(desde_thread = False, emit_progress = Non
         state = SharedState()
 
         for info_device in info_devices:
-            logging.debug(f'info_device["activo"]: {eval(info_device["activo"])} - desde_thread: {desde_thread}')
-            if eval(info_device["activo"]) or desde_thread:
+            logging.debug(f'info_device["activo"]: {eval(info_device["activo"])} - desde_service: {desde_service}')
+            if eval(info_device["activo"]) or desde_service:
                 logging.debug(f'info_device_active: {info_device}')
                 info_devices_active.append(info_device)
 
@@ -88,7 +88,7 @@ def gestionar_marcaciones_dispositivos(desde_thread = False, emit_progress = Non
                 
         for info_device_active in info_devices_active:
             try:
-                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device_active, desde_thread, emit_progress, state))
+                gt.append(pool.spawn(gestionar_marcaciones_dispositivo, info_device_active, desde_service, emit_progress, state))
             except Exception as e:
                 pass
         
@@ -115,10 +115,10 @@ def gestionar_marcaciones_dispositivos(desde_thread = False, emit_progress = Non
 
     return results
 
-def gestionar_marcaciones_dispositivo(info_device, p_desde_thread, emit_progress, state):
+def gestionar_marcaciones_dispositivo(info_device, p_desde_service, emit_progress, state):
     try:
         try:
-            attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370, info_device['communication'],), desde_thread=p_desde_thread)
+            attendances = reintentar_operacion_de_red(obtener_marcaciones, args=(info_device['ip'], 4370, info_device['communication'],), desde_service=p_desde_service)
             attendances = format_attendances(attendances, info_device["id"])
             logging.info(f'{info_device["ip"]} - Length attendances: {len(attendances)} - Attendances: {attendances}')
             
