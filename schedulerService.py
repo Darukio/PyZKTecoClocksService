@@ -1,3 +1,4 @@
+from datetime import datetime
 import sys
 import os
 import time
@@ -7,6 +8,7 @@ import win32service
 import win32event
 import logging
 import servicemanager
+import locale
 
 from scripts.business_logic.attendances_manager import gestionar_marcaciones_dispositivos
 from scripts.business_logic.hour_manager import actualizar_hora_dispositivos
@@ -16,6 +18,8 @@ svc_python_class = "schedulerService.SchedulerService"
 svc_name = "GESTOR_RELOJ_ASISTENCIA"
 svc_display_name = "GESTOR RELOJ DE ASISTENCIAS"
 svc_description = "Servicio para sincronización de tiempo y recuperación de datos de asistencia."
+
+locale.setlocale(locale.LC_TIME, "Spanish_Argentina.1252")  # Español de Argentina
 
 class SchedulerService(win32serviceutil.ServiceFramework):
     _svc_name_ = svc_name
@@ -34,7 +38,15 @@ class SchedulerService(win32serviceutil.ServiceFramework):
             if not os.path.exists(logs_folder):
                 os.makedirs(logs_folder)
 
-            debug_log_file = os.path.join(logs_folder, 'scheduler_debug.log')
+            new_time = datetime.today().date()
+            date_string = new_time.strftime("%Y-%b")
+            logs_month_folder = os.path.join(logs_folder, date_string)
+
+            # Crear la carpeta logs_month si no existe
+            if not os.path.exists(logs_month_folder):
+                os.makedirs(logs_month_folder)
+
+            debug_log_file = os.path.join(logs_month_folder, 'scheduler_debug.log')
             # Configurar el sistema de registros básico para program_debug.log
             logging.basicConfig(filename=debug_log_file, level=logging.DEBUG,
                                 format='%(asctime)s - %(levelname)s - %(message)s')

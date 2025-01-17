@@ -17,10 +17,14 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from datetime import datetime
 import os
 import logging
 import sys
 from .file_manager import *
+import locale
+
+locale.setlocale(locale.LC_TIME, "Spanish_Argentina.1252")  # Español de Argentina
 
 def config_log():
     logs_folder = os.path.join(encontrar_directorio_raiz(), 'logs')
@@ -29,7 +33,15 @@ def config_log():
     if not os.path.exists(logs_folder):
         os.makedirs(logs_folder)
 
-    debug_log_file = os.path.join(logs_folder, 'program_debug.log')
+    new_time = datetime.today().date()
+    date_string = new_time.strftime("%Y-%b")
+    logs_month_folder = os.path.join(logs_folder, date_string)
+
+    # Crear la carpeta logs_month si no existe
+    if not os.path.exists(logs_month_folder):
+        os.makedirs(logs_month_folder)
+
+    debug_log_file = os.path.join(logs_month_folder, 'program_debug.log')
 
     # Configurar el sistema de registros básico para program_debug.log
     logging.basicConfig(
@@ -39,7 +51,7 @@ def config_log():
     )
 
     # Configurar un controlador adicional para 'program_error.log'
-    error_log_file = os.path.join(logs_folder, 'program_error.log')
+    error_log_file = os.path.join(logs_month_folder, 'program_error.log')
     error_logger = logging.FileHandler(error_log_file)
     error_logger.setLevel(logging.WARNING)
 
