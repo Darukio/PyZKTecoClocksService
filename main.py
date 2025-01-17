@@ -33,7 +33,7 @@ import os
 import psutil
 
 # Versión del programa
-VERSION = "v2.1.22"
+VERSION = "v2.1.23"
 
 # Para leer un archivo INI
 from scripts import config
@@ -160,14 +160,15 @@ def main():
         cerrar_instancia_duplicada()
 
     check_and_install_service()
+
+    config_log_console()
         
     MODE = 'User' if getattr(sys, 'frozen', False) else 'Developer'
     msg_init = f"Program version: {VERSION} - Mode: {MODE}"
     logging.info(msg_init)
+    
     print(msg_init)
     print_copyright()
-
-    config_log_console()
     config_content()
     logging.debug(sys.argv)
     try:
