@@ -94,3 +94,9 @@ def encontrar_directorio_raiz():
         path = encontrar_directorio_de_marcador(marcador)
 
     return path
+
+def existe_archivo_en_carpeta(nombre_archivo, carpeta):
+    from pathlib import Path
+    # Crear un objeto Path para la carpeta y archivo
+    ruta_completa = Path(carpeta) / nombre_archivo
+    return ruta_completa.is_file()
