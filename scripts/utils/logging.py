@@ -30,9 +30,13 @@ def config_log():
         os.makedirs(logs_folder)
 
     debug_log_file = os.path.join(logs_folder, 'program_debug.log')
+
     # Configurar el sistema de registros básico para program_debug.log
-    logging.basicConfig(filename=debug_log_file, level=logging.DEBUG,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(
+        filename=debug_log_file,
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s'
+    )
 
     # Configurar un controlador adicional para 'program_error.log'
     error_log_file = os.path.join(logs_folder, 'program_error.log')
