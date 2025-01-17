@@ -16,7 +16,14 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+import win32serviceutil
+import logging
+import os
+import time
+import win32service
 
+from schedulerService import check_and_install_service
+from scripts.ui.message_box import MessageBox
 from ..utils.add_to_startup import *
 from ..utils.errors import *
 from ..utils.file_manager import *
@@ -25,55 +32,26 @@ from ..business_logic.hour_manager import *
 from scripts import config
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
-import logging
-import os
-import time
-import schedule
 from ..utils.add_to_startup import is_startup_entry_exists
 from PyQt5.QtWidgets import QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
-from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal
+from PyQt5.QtCore import pyqtSlot
 from .window_manager import DeviceStatusDialog, DeviceAttendancesCountDialog, DeviceAttendancesDialog, DeviceDialog
 
 config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))  # Lectura del archivo de configuración config.ini
 
-class ScheduleThread(QThread):
-    operation_running = pyqtSignal(bool)
-
-    def __init__(self):
-        super().__init__()
-        self.is_running = True  # Variable para controlar el estado del hilo
-        self.operation_running.emit(self.is_running)  # Emitir resultado
-
-    def run(self):
-        # Función para ejecutar run_pending() en segundo plano
-        try:
-            logging.debug('Hilo en ejecucion...')
-            while self.is_running:
-                try:
-                    schedule.run_pending()
-                except Exception as task_error:
-                    logging.error(f"Error en la ejecución de una tarea programada: {task_error}")
-
-                time.sleep(60)
-        except Exception as e:
-            logging.error(e)
-
-    def stop(self):
-        self.is_running = False
-        self.operation_running.emit(self.is_running)  # Cambiar el estado para detener el hilo
-
 class MainWindow(QMainWindow):
+    MAX_RETRIES = 30  # Número máximo de reintentos para iniciar el servicio
+    service_name = "GESTOR_RELOJ_ASISTENCIA"  # Nombre del servicio
+
     def __init__(self):
         super().__init__()
         self.is_running = False  # Variable para indicar si la aplicación está corriendo
-        self.schedule_thread = None  # Hilo para ejecutar tareas programadas
         logging.debug(config)
         self.checked_clear_attendance = eval(config['Device_config']['clear_attendance'])  # Estado del checkbox de eliminación de marcaciones
         self.checked_automatic_init = is_startup_entry_exists()
 
         self.tray_icon = None  # Variable para almacenar el QSystemTrayIcon
         self.__init_ui()  # Inicialización de la interfaz de usuario
-        self.configurar_schedule()  # Configuración de las tareas programadas
 
         self.__opt_start_execution()
 
@@ -94,19 +72,22 @@ class MainWindow(QMainWindow):
 
         try:
             self.tray_icon = QSystemTrayIcon(QIcon(file_path), self)  # Creación del QSystemTrayIcon con el ícono y ventana principal asociada
+            self.tray_icon.showMessage("Notificación", 'Iniciando la aplicación', QSystemTrayIcon.Information)
             self.tray_icon.setToolTip("Gestor Reloj de Asistencias")  # Texto al colocar el cursor sobre el ícono
 
             # Crear un menú contextual personalizado
             menu = QMenu()
-            menu.addAction(self.__create_action("Iniciar", lambda: self.__opt_start_execution()))  # Acción para iniciar la ejecución
-            menu.addAction(self.__create_action("Detener", lambda: self.__opt_stop_execution()))  # Acción para detener la ejecución
-            menu.addAction(self.__create_action("Reiniciar", lambda: self.__opt_restart_execution()))  # Acción para reiniciar la ejecución
+            menu.addAction(self.__create_action("Iniciar servicio", lambda: self.__opt_start_execution()))  # Acción para iniciar la ejecución
+            menu.addAction(self.__create_action("Detener servicio", lambda: self.__opt_stop_execution()))  # Acción para detener la ejecución
+            menu.addAction(self.__create_action("Reiniciar servicio", lambda: self.__opt_restart_execution()))  # Acción para reiniciar la ejecución
+            menu.addAction(self.__create_action("Reinstalar servicio", lambda: self.__opt_reinstall_service()))  # Acción para reinstalar el servicio
+            menu.addSeparator()  # Separador en el menú contextual
             menu.addAction(self.__create_action("Modificar dispositivos", lambda: self.__opt_modify_devices()))  # Acción para modificar dispositivos
             menu.addAction(self.__create_action("Probar conexiones", lambda: self.__opt_test_connections()))  # Acción para probar conexiones
             menu.addAction(self.__create_action("Actualizar hora", lambda: self.__opt_update_devices_time()))  # Acción para actualizar la hora del dispositivo
             menu.addAction(self.__create_action("Obtener marcaciones", lambda: self.__opt_fetch_devices_attendances()))  # Acción para obtener las marcaciones de dispositivos
             menu.addAction(self.__create_action("Obtener cantidad de marcaciones", lambda: self.__opt_show_attendances_count()))  # Acción para mostrar la cantidad de marcaciones
-
+            menu.addSeparator()  # Separador en el menú contextual
             # Checkbox como QAction con estado verificable
             clear_attendance_action = QAction("Eliminar marcaciones", menu)
             clear_attendance_action.setCheckable(True)  # Hacer el QAction verificable
@@ -121,14 +102,47 @@ class MainWindow(QMainWindow):
             automatic_init_action.setChecked(self.checked_automatic_init)
             automatic_init_action.triggered.connect(self.__opt_toggle_checkbox_automatic_init)
             menu.addAction(automatic_init_action)
-
+            menu.addSeparator()  # Separador en el menú contextual
             menu.addAction(self.__create_action("Salir", lambda: self.__opt_exit_icon()))  # Acción para salir de la aplicación
             self.tray_icon.setContextMenu(menu)  # Asignar menú contextual al ícono
 
         except Exception as e:
-            print(f"Error al crear el ícono en la bandeja del sistema: {e}")
+            logging.error(f"Error al crear el ícono en la bandeja del sistema: {e}")
 
         self.tray_icon.show()  # Mostrar el ícono en la bandeja del sistema
+
+    def __opt_reinstall_service(self):
+        try:
+            self.__opt_stop_execution()
+            win32serviceutil.RemoveService(self.service_name)
+            time.sleep(5)
+            retries = 0
+            success = False
+
+            while retries < self.MAX_RETRIES and not success:
+                try:
+                    logging.info(f"Intentando instalar el servicio... Intento {retries + 1}/{self.MAX_RETRIES}")
+                    logging.debug(encontrar_directorio_raiz())
+                    
+                    check_and_install_service()
+                    self.__opt_start_execution()
+                    if self.verificar_servicio_corriendo(self.service_name):
+                        self.tray_icon.showMessage("Notificación", 'El servicio se reinstaló correctamente', QSystemTrayIcon.Information)
+                        success = True
+                        break
+                    time.sleep(1)  # Espera un momento para que el servicio cambie de estado
+                except win32service.error as e:
+                    if e.winerror == 1060:
+                        logging.error(f'Error al iniciar el servicio {self.service_name}: {e.strerror}')
+                    return
+                except Exception as e:
+                    logging.error(f"Error al intentar iniciar el servicio: {e}")
+                finally:
+                    retries += 1
+                    if not success:
+                        time.sleep(15)  # Espera antes de intentar nuevamente
+        except Exception as e:
+            logging.error(f"Error al reinstalar el servicio: {e}")
 
     def __create_action(self, text, function):
         """
@@ -144,25 +158,7 @@ class MainWindow(QMainWindow):
         action = QAction(text, self)  # Crear QAction con el texto y la ventana principal asociada
         action.triggered.connect(function)  # Conectar la acción con la función proporcionada
         return action  # Devolver la acción creada
-
-    def __show_message(self, title, text):
-        """
-        Mostrar un cuadro de diálogo con un mensaje.
-
-        Args:
-            title (str): Título del cuadro de diálogo.
-            text (str): Texto del mensaje.
-        """
-        msg_box = QMessageBox()  # Crear instancia de QMessageBox
-        msg_box.setWindowTitle(title)  # Establecer el título del cuadro de diálogo
-        msg_box.setText(text)  # Establecer el texto del mensaje
-        msg_box.setIcon(QMessageBox.Information)  # Establecer el ícono del cuadro de diálogo (información)
-        msg_box.exec_()  # Mostrar el cuadro de diálogo
-
-        # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
-        if self.tray_icon:
-            self.tray_icon.contextMenu().setVisible(True)
-
+    
     def __set_icon_color(self, icon, color):
         """
         Cambiar el color del ícono en la bandeja del sistema.
@@ -195,37 +191,110 @@ class MainWindow(QMainWindow):
         tiempo_transcurrido = tiempo_final - tiempo_inicial  # Calcular el tiempo transcurrido
         logging.debug(f'La tarea finalizo en {tiempo_transcurrido:.2f} segundos')
         self.tray_icon.showMessage("Notificación", f'La tarea finalizó en {tiempo_transcurrido:.2f} segundos', QSystemTrayIcon.Information)  # Mostrar notificación con el tiempo transcurrido
-    
+
     @pyqtSlot()
     def __opt_start_execution(self):
         """
-        Opción para iniciar la ejecución de la aplicación.
+        Opción para iniciar la ejecución de la aplicación con reintentos y verificación del estado del servicio.
         """
-        self.__update_running_thread(True)  # Marcar que la aplicación está corriendo
-        self.__set_icon_color(self.tray_icon, "green")  # Establecer el color del ícono a verde
-        try:
-            self.schedule_thread = ScheduleThread()
-            self.schedule_thread.operation_running.connect(self.__update_running_thread)            
-            logging.debug('Hilo iniciado...')  # Registro de depuración: hilo iniciado
-            self.schedule_thread.start()
-        except Exception as e:
-            logging.critical(e)  # Registro crítico si ocurre un error al iniciar el hilo
+        self.tray_icon.showMessage("Notificación", 'Iniciando el servicio', QSystemTrayIcon.Information)
+        retries = 0
+        success = False
 
-    def __update_running_thread(self, is_running):
+        while retries < self.MAX_RETRIES and not success:
+            try:
+                if self.verificar_servicio_corriendo(self.service_name):
+                    logging.info("El servicio se inicio correctamente")
+                    success = True
+                    break
+
+                logging.info(f"Intentando iniciar el servicio... Intento {retries + 1}/{self.MAX_RETRIES}")
+                logging.debug(encontrar_directorio_raiz())
+                win32serviceutil.StartService(self.service_name, encontrar_directorio_raiz())
+                time.sleep(1)  # Espera un momento para que el servicio cambie de estado
+            except win32service.error as e:
+                if e.winerror == 1060:
+                    logging.error(f'Error al iniciar el servicio {self.service_name}: {e.strerror}')
+                return
+            except Exception as e:
+                logging.error(f"Error al intentar iniciar el servicio: {e}")
+            finally:
+                retries += 1
+                if not success:
+                    time.sleep(5)  # Espera antes de intentar nuevamente
+
+        if success:
+            self.__update_running_service(True)  # Marcar que la aplicación está corriendo
+            self.__set_icon_color(self.tray_icon, "green")  # Establecer el color del ícono a verde
+        else:
+            logging.critical("No se pudo iniciar el servicio despues de multiples intentos")
+
+    def __update_running_service(self, is_running):
         self.is_running = is_running
+
+    def __show_message_information(self, title, text):
+        """
+        Mostrar un cuadro de diálogo con un mensaje.
+
+        Args:
+            title (str): Título del cuadro de diálogo.
+            text (str): Texto del mensaje.
+        """
+        msg_box = QMessageBox()  # Crear instancia de QMessageBox
+        msg_box.setWindowTitle(title)  # Establecer el título del cuadro de diálogo
+        msg_box.setText(text)  # Establecer el texto del mensaje
+        msg_box.setIcon(QMessageBox.Information)  # Establecer el ícono del cuadro de diálogo (información)
+        file_path = os.path.join(encontrar_directorio_de_marcador("resources"), "resources", "fingerprint.ico")
+        msg_box.setWindowIcon(QIcon(file_path))
+        msg_box.exec_()  # Mostrar el cuadro de diálogo
+
+        # Una vez cerrado el QMessageBox, mostrar el menú contextual nuevamente
+        if self.tray_icon:
+            self.tray_icon.contextMenu().setVisible(True)
 
     @pyqtSlot()
     def __opt_stop_execution(self):
         """
         Opción para detener la ejecución de la aplicación.
         """
-        self.__update_running_thread(False)
-        logging.debug(self.schedule_thread)
-        if self.schedule_thread and self.schedule_thread.is_running:
-            self.schedule_thread.stop()  # Esperar a que el hilo termine
-        logging.debug('Hilo detenido...')  # Registro de depuración: hilo detenido
+        self.__update_running_service(False)
+        if self.verificar_servicio_corriendo(self.service_name):
+            win32serviceutil.StopService(self.service_name)
+            self.tray_icon.showMessage("Notificación", 'Deteniendo el servicio', QSystemTrayIcon.Information)
+            logging.debug("Deteniendo el servicio")
+            while not self.verificar_servicio_detenido(self.service_name):
+                time.sleep(1)
+                logging.debug("Esperando a que el servicio se detenga...")
+                if self.verificar_servicio_detenido(self.service_name):
+                    logging.debug("Se detuvo el servicio")
+                    self.tray_icon.showMessage("Notificación", 'El servicio se detuvo correctamente', QSystemTrayIcon.Information)
         if self.color_icon != "yellow":
             self.__set_icon_color(self.tray_icon, "red")  # Establecer el color del ícono a rojo
+
+    def verificar_servicio_detenido(self, nombre_servicio):
+        try:
+            status = win32serviceutil.QueryServiceStatus(nombre_servicio)
+            logging.debug(f"Estado del servicio {nombre_servicio}: {status[1]}")  # Registro de depuración: estado del servicio
+            # El estado 4 significa que está corriendo
+            if status[1] == 1:
+                return True
+            return False
+        except Exception as e:
+            print(f"Error al verificar el estado del servicio: {e}")
+            return False
+        
+    def verificar_servicio_corriendo(self, nombre_servicio):
+        try:
+            status = win32serviceutil.QueryServiceStatus(nombre_servicio)
+            logging.debug(f"Estado del servicio {nombre_servicio}: {status[1]}")  # Registro de depuración: estado del servicio
+            logging.debug(status[1] == 4)
+            # El estado 4 significa que está corriendo
+            if status[1] == 4:
+                return True
+            return False
+        except Exception as e:
+            print(f"Error al verificar el estado del servicio: {e}")
+            return False
 
     @pyqtSlot()
     def __opt_restart_execution(self):
@@ -349,56 +418,15 @@ class MainWindow(QMainWindow):
         Opción para salir de la aplicación.
         """
         if self.tray_icon:
-            logging.debug(schedule.get_jobs())  # Registro de depuración: obtener trabajos programados
-            if len(schedule.get_jobs()) >= 1:
-                self.__opt_stop_execution()  # Detener la ejecución si hay trabajos programados
+            # if len(schedule.get_jobs()) >= 1:
+            #self.__opt_stop_execution()  # Detener la ejecución si hay trabajos programados
             self.tray_icon.hide()  # Ocultar el ícono en la bandeja del sistema
             QApplication.quit()  # Salir de la aplicación
-
-    def configurar_schedule(self):
-        '''
-        Configurar las tareas programadas en base a las horas cargadas desde el archivo.
-        '''
-        # Ruta del archivo de texto que contiene las horas de ejecución
-        file_path = os.path.join(encontrar_directorio_raiz(), 'schedule.txt')
-        logging.debug(file_path)
-
-        try:
-            content = cargar_desde_archivo(file_path)  # Cargar contenido desde el archivo
-        except Exception as e:
-            logging.error(e)  # Registro de error si falla la operación
-            return
-
-        gestionar_hours = []
-        actualizar_hours = []
-        current_task = None
-
-        for line in content:
-            if line.startswith("#"):
-                if "gestionar_marcaciones_dispositivos" in line:
-                    current_task = "gestionar"
-                elif "actualizar_hora_dispositivos" in line:
-                    current_task = "actualizar"
-            elif line:
-                if current_task == "gestionar":
-                    gestionar_hours.append(line)
-                elif current_task == "actualizar":
-                    actualizar_hours.append(line)
-
-        if gestionar_hours:
-            # Iterar las horas de ejecución para gestionar_marcaciones_dispositivos
-            for hour_to_perform in gestionar_hours:
-                schedule.every().day.at(hour_to_perform).do(self.thread_gestionar_marcaciones_dispositivos)
-
-        if actualizar_hours:
-            # Iterar las horas de ejecución para actualizar_hora_dispositivos
-            for hour_to_perform in actualizar_hours:
-                schedule.every().day.at(hour_to_perform).do(self.thread_actualizar_hora_dispositivos)
 
     def thread_gestionar_marcaciones_dispositivos(self):
         self.__set_icon_color(self.tray_icon, "yellow")
         try:
-            gestionar_marcaciones_dispositivos(desde_thread=True)
+            gestionar_marcaciones_dispositivos(desde_service=True)
         except Exception as e:
             logging.critical(e)
         self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
@@ -406,7 +434,7 @@ class MainWindow(QMainWindow):
     def thread_actualizar_hora_dispositivos(self):
         self.__set_icon_color(self.tray_icon, "yellow")
         try:
-            actualizar_hora_dispositivos(desde_thread=True)
+            actualizar_hora_dispositivos(desde_service=True)
         except Exception as e:
             logging.critical(e)
         self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restaurar color del ícono según estado de ejecución
