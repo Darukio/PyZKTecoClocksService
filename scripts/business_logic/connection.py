@@ -66,7 +66,7 @@ def finalizar_conexion(conn, ip, port, communication):
         raise IntentoConexionFallida(ip) from e
     eventlet.sleep(0)
     
-def actualizar_hora(conn, desde_thread = False):
+def actualizar_hora(conn, desde_service = False):
     ip = None
     try:
         ip = conn.get_network_params()["ip"]
@@ -102,7 +102,7 @@ def validar_hora(zktime):
     zktime.year != newtime.year):
         raise Exception('Hours or date between device and machine doesn\'t match')
     
-def obtener_marcaciones(conn, desde_thread):
+def obtener_marcaciones(conn, desde_service):
     attendances = []
     ip = None
     try:
@@ -130,8 +130,8 @@ def obtener_marcaciones(conn, desde_thread):
 
             tiempo_inicial_2 = time.time()
             config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
-            # Determina la configuración adecuada según el valor de desde_thread
-            config_key = 'clear_attendance_thread' if desde_thread else 'clear_attendance'
+            # Determina la configuración adecuada según el valor de desde_service
+            config_key = 'clear_attendance_service' if desde_service else 'clear_attendance'
             logging.debug(f'clear_attendance: {config['Device_config'][config_key]}')
 
             # Evalúa la configuración seleccionada
@@ -150,7 +150,7 @@ def obtener_marcaciones(conn, desde_thread):
     except Exception as e:
         raise IntentoConexionFallida(ip) from e
 
-def obtener_cantidad_marcaciones(conn, desde_thread):
+def obtener_cantidad_marcaciones(conn, desde_service):
     ip = None
     try:
         ip = conn.get_network_params()["ip"]
