@@ -17,47 +17,58 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from datetime import datetime
-import os
+import json
 import logging
+import os
+from PyQt5.QtWidgets import QMessageBox
 
-class ErrorConEscrituraEnArchivo(Exception):
-    def __init__(self, nombre_modelo, punto_marcacion, ip, message_prefix):
-        try:
-            from .file_manager import crear_carpeta_y_devolver_ruta
-            # Llama a la función desde el módulo importado
-            folder_path = crear_carpeta_y_devolver_ruta('devices', 'errors')
-            new_date = datetime.today().date().strftime("%Y-%m-%d")
-            file_name = f'errors_{new_date}.txt'
-            file_path = os.path.join(folder_path, file_name)
-            current_time = datetime.now().strftime("%H:%M:%S")
-            self.mensaje = f'{current_time} {ip} - {message_prefix} {nombre_modelo} - {punto_marcacion}\n'
-            with open(file_path, 'a') as file:
-                file.write(self.mensaje)
-            self.mensaje = f'{ip} - {message_prefix} {nombre_modelo} - {punto_marcacion}'
-            super().__init__(self.mensaje)
-        except Exception as e:
-            logging.error(f'Error al manejar excepción: {e}')
+from scripts.utils.file_manager import find_marker_directory
 
-class IntentoConexionFallida(Exception):
-    def __init__(self, ip):
+# Load errors from JSON
+with open(os.path.join(find_marker_directory("json"), "json", "errors.json"), encoding="utf-8") as f:
+    ERRORS = json.load(f)
+
+class BaseError(Exception):
+    """Base class for errors with logging support."""
+
+    def __init__(self, error_code, extra_info="", level="error"):
+        self.code = error_code
+        self.message = ERRORS.get(str(error_code), 0000)
+        
+        if extra_info:
+            self.message += f" ({extra_info})"
+
+        log = f"[{self.code}] {self.message}"
+        # Determine logging level
+        if level == "warning":
+            logging.warning(log)
+        elif level == "error":
+            logging.error(log)
+        elif level == "critical":
+            logging.critical(log)
+
+        super().__init__(log)
+
+class BaseErrorWithMessageBox(BaseError):
+    """Base class for errors with logging and message box support."""
+
+    def __init__(self, error_code, extra_info="", level="error"):
+        super().__init__(error_code, extra_info, level)
+        QMessageBox.critical(None, f"Error {self.code}", self.message)
+
+# Error and warning classes
+class ConnectionFailedError(BaseError):
+    def __init__(self, extra_info=""):
+        super().__init__(1000, extra_info, level="warning")
+
+class NetworkError(BaseError):
+    def __init__(self, model_name="", point="", ip=""):
+        super().__init__(1001, f'{model_name} - {point} - {ip}')
+
+class OutdatedTimeError(Exception):
+    def __init__(self, ip=""):
         super().__init__(ip)
 
-class ConexionFallida(ErrorConEscrituraEnArchivo):
-    def __init__(self, nombre_modelo, punto_marcacion, ip):
-        message_prefix = 'Conexion fallida con'
-        super().__init__(nombre_modelo, punto_marcacion, ip, message_prefix)
-
-class HoraValidacionFallida(Exception):
-    def __init__(self, ip):
-        super().__init__(ip)
-
-class HoraDesactualizada(ErrorConEscrituraEnArchivo):
-    def __init__(self, nombre_modelo, punto_marcacion, ip):
-        message_prefix = 'Pila fallando de'
-        super().__init__(nombre_modelo, punto_marcacion, ip, message_prefix)
-
-class CargaArchivoFallida(Exception):
-    def __init__(self, file_path):
-        self.mensaje = f'Carga fallida del archivo {file_path}'
-        super().__init__(self.mensaje)
+class BatteryFailingError(BaseError):
+    def __init__(self, model_name="", point="", ip=""):
+        super().__init__(2001, f'{model_name} - {point} - {ip}')
