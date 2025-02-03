@@ -17,16 +17,21 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import os
-from PyQt5.QtWidgets import QMessageBox
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QWidget, QCheckBox, QHBoxLayout
+from PyQt5.QtCore import Qt
 
-from scripts.utils.file_manager import find_marker_directory
+class CheckBoxDelegate(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        self.checkbox = QCheckBox(self)
+        layout.addWidget(self.checkbox)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
 
-# Subclass for the device status dialog
-class MessageBox(QMessageBox):
-    def __init__(self, icon, text, parent=None):
-        super().__init__(icon, 'Gestor Reloj de Asistencias', text, parent)
+    def isChecked(self):
+        return self.checkbox.isChecked()
 
-        file_path = os.path.join(find_marker_directory("resources"), "resources", "fingerprint.ico")
-        self.setWindowIcon(QIcon(file_path))
+    def setChecked(self, state):
+        self.checkbox.setChecked(state)

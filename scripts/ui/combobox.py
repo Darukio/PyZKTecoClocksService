@@ -17,16 +17,25 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import os
-from PyQt5.QtWidgets import QMessageBox
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox
 
-from scripts.utils.file_manager import find_marker_directory
+class ComboBoxDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-# Subclass for the device status dialog
-class MessageBox(QMessageBox):
-    def __init__(self, icon, text, parent=None):
-        super().__init__(icon, 'Gestor Reloj de Asistencias', text, parent)
+    def createEditor(self, parent, option, index):
+        # Create and configure a new QComboBox for the cell
+        combo_box = QComboBox(parent)
+        combo_box.addItem("UDP")
+        combo_box.addItem("TCP")
+        return combo_box
 
-        file_path = os.path.join(find_marker_directory("resources"), "resources", "fingerprint.ico")
-        self.setWindowIcon(QIcon(file_path))
+    def setEditorData(self, editor, index):
+        # Set the value of the QComboBox according to the model data
+        value = index.data()
+        if value is not None:
+            editor.setCurrentText(value)
+
+    def setModelData(self, editor, model, index):
+        # Save the selected value of the QComboBox in the model
+        model.setData(index, editor.currentText())
