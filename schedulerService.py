@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 from datetime import datetime
 import sys
 import os
@@ -9,10 +12,11 @@ import win32event
 import logging
 import servicemanager
 import locale
+from PyQt5.QtCore import QThread
 
-from scripts.business_logic.attendances_manager import gestionar_marcaciones_dispositivos
-from scripts.business_logic.hour_manager import actualizar_hora_dispositivos
-from scripts.utils.file_manager import cargar_desde_archivo, encontrar_directorio_raiz, existe_archivo_en_carpeta
+from scripts.business_logic.attendances_manager import manage_device_attendances
+from scripts.business_logic.hour_manager import update_device_time
+from scripts.utils.file_manager import file_exists_in_folder, find_root_directory, load_from_file
 
 svc_python_class = "schedulerService.SchedulerService"
 svc_name = "GESTOR_RELOJ_ASISTENCIA"
@@ -21,12 +25,23 @@ svc_description = "Servicio para sincronización de tiempo y recuperación de da
 
 locale.setlocale(locale.LC_TIME, "Spanish_Argentina.1252")  # Español de Argentina
 
+class OperationThread(QThread):
+    def __init__(self, operation_function, parent=None):
+        super().__init__(parent)
+        self.operation_function = operation_function
+
+    def run(self):
+        try:
+            self.operation_function(from_service=True)
+        except Exception as e:
+            logging.critical(e)
+
 class SchedulerService(win32serviceutil.ServiceFramework):
     _svc_name_ = svc_name
     _svc_display_name_ = svc_display_name
     _svc_description_ = svc_description
     is_running = True
-    path = encontrar_directorio_raiz()
+    path = find_root_directory()
 
     def __init__(self, args):
         try:
@@ -78,7 +93,7 @@ class SchedulerService(win32serviceutil.ServiceFramework):
         print("Path: "+os.path.abspath(__file__))
         
         try:
-            self.configurar_schedule()
+            self.configure_schedule()
         except Exception as e:
             logging.error(e)
         
@@ -97,64 +112,69 @@ class SchedulerService(win32serviceutil.ServiceFramework):
             logging.error('Error inesperado: %s', e)
             self.SvcStop()
 
-    def configurar_schedule(self):
+    def configure_schedule(self):
         '''
-        Configurar las tareas programadas en base a las horas cargadas desde el archivo.
+        Configure scheduled tasks based on the times loaded from the file.
         '''
         file_path = os.path.join(self.path, 'schedule.txt')
         
-        logging.debug(not existe_archivo_en_carpeta('schedule.txt', file_path))
-        if existe_archivo_en_carpeta('schedule.txt', file_path):
-            # Ruta del archivo de texto que contiene las horas de ejecución
-            file_path = os.path.join(encontrar_directorio_raiz(), 'schedule.txt')
+        logging.debug(not file_exists_in_folder('schedule.txt', file_path))
+        if file_exists_in_folder('schedule.txt', file_path):
+            # Path to the text file containing execution times
+            file_path = os.path.join(find_root_directory(), 'schedule.txt')
         logging.debug(file_path)
 
         try:
-            content = cargar_desde_archivo(file_path)  # Cargar contenido desde el archivo
+            content = load_from_file(file_path)  # Load content from the file
         except Exception as e:
-            logging.error(e)  # Registro de error si falla la operación
+            logging.error(e)  # Log error if the operation fails
             return
 
-        gestionar_hours = []
-        actualizar_hours = []
+        manage_hours = []
+        update_hours = []
         current_task = None
 
         for line in content:
             if line.startswith("#"):
                 if "gestionar_marcaciones_dispositivos" in line:
-                    current_task = "gestionar"
+                    current_task = "manage"
                 elif "actualizar_hora_dispositivos" in line:
-                    current_task = "actualizar"
+                    current_task = "update"
             elif line:
-                if current_task == "gestionar":
-                    gestionar_hours.append(line)
-                elif current_task == "actualizar":
-                    actualizar_hours.append(line)
+                if current_task == "manage":
+                    manage_hours.append(line)
+                elif current_task == "update":
+                    update_hours.append(line)
 
-        if gestionar_hours:
-            # Iterar las horas de ejecución para gestionar_marcaciones_dispositivos
-            for hour_to_perform in gestionar_hours:
-                # schedule.every().day.at(hour_to_perform).do(self.thread_gestionar_marcaciones_dispositivos)
-                schedule.every().day.at(hour_to_perform).do(gestionar_marcaciones_dispositivos, desde_service=True)
+        if manage_hours:
+            # Iterate over execution times for manage_device_attendances
+            for hour_to_perform in manage_hours:
+                schedule.every().day.at(hour_to_perform).do(manage_device_attendances, from_service=True)
 
-        if actualizar_hours:
-            # Iterar las horas de ejecución para actualizar_hora_dispositivos
-            for hour_to_perform in actualizar_hours:
-                # schedule.every().day.at(hour_to_perform).do(self.thread_actualizar_hora_dispositivos)
-                schedule.every().day.at(hour_to_perform).do(actualizar_hora_dispositivos, desde_service=True)
+        if update_hours:
+            # Iterate over execution times for update_device_time
+            for hour_to_perform in update_hours:
+                schedule.every().day.at(hour_to_perform).do(update_device_time, from_service=True)
+
+def create_operation_thread(operation_function):
+    '''
+    Create a thread to execute an operation.
+    '''
+    thread = OperationThread(operation_function)
+    thread.start()
 
 def service_is_installed(service_name):
     try:
-        # Abre el gestor de control de servicios
+        # Open the service control manager
         scm = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_ALL_ACCESS)
         try:
-            # Intenta abrir el servicio
-            servicio = win32service.OpenService(scm, service_name, win32service.SERVICE_QUERY_STATUS)
-            # Si se puede abrir, el servicio está instalado
-            win32service.CloseServiceHandle(servicio)
+            # Try to open the service
+            service = win32service.OpenService(scm, service_name, win32service.SERVICE_QUERY_STATUS)
+            # If the service can be opened, it is installed
+            win32service.CloseServiceHandle(service)
             return True
         except win32service.error as e:
-            # Si el error es ERROR_SERVICE_DOES_NOT_EXIST, el servicio no está instalado
+            # If the error is ERROR_SERVICE_DOES_NOT_EXIST, the service is not installed
             logging.error("Servicio no instalado")
             return False
         finally:
@@ -165,20 +185,19 @@ def service_is_installed(service_name):
     
 def check_and_install_service():
     if not service_is_installed(svc_name):
-        # Instalar el servicio si no está instalado
+        # Install the service if it is not installed
         try:
-            logging.debug(os.path.join(encontrar_directorio_raiz(), 'schedulerService.exe'))
-            logging.debug(os.path.isfile(os.path.join(encontrar_directorio_raiz(), 'schedulerService.exe')))
+            logging.debug(os.path.join(find_root_directory(), 'schedulerService.exe'))
+            logging.debug(os.path.isfile(os.path.join(find_root_directory(), 'schedulerService.exe')))
             exe_name = None
-            if os.path.isfile(os.path.join(encontrar_directorio_raiz(), 'schedulerService.exe')):
-                exe_name = os.path.join(encontrar_directorio_raiz(), 'schedulerService.exe')
+            if os.path.isfile(os.path.join(find_root_directory(), 'schedulerService.exe')):
+                exe_name = os.path.join(find_root_directory(), 'schedulerService.exe')
                 logging.debug("EXE: "+exe_name)
             win32serviceutil.InstallService(pythonClassString=svc_python_class, serviceName=svc_name, displayName=svc_display_name, exeName=exe_name, description=svc_description, startType=win32service.SERVICE_AUTO_START)
             
         except Exception as e:
             logging.error(f'Error al instalar el servicio {svc_name}: {e}')
             return
-        #subprocess.run(['sc', 'create', svc_name, 'binPath= "' + svc_script + '"'])
         logging.info(f'Servicio {svc_name} instalado correctamente')
     else:
         logging.info(f'Servicio {svc_name} ya instalado')

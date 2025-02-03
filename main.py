@@ -18,6 +18,8 @@
 """
 
 import eventlet
+
+from scripts.utils.errors import BaseError
 eventlet.monkey_patch()
 from schedulerService import check_and_install_service
 import ctypes
@@ -27,17 +29,17 @@ from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtWidgets import QApplication
 from scripts.ui.icon_manager import MainWindow
 from scripts.utils.logging import config_log, logging
-from scripts.utils.file_manager import encontrar_directorio_raiz
+from scripts.utils.file_manager import find_root_directory
 import sys
 import os
 import psutil
 
 # Versión del programa
-VERSION = "v2.1.23"
+VERSION = "v2.2.39"
 
 # Para leer un archivo INI
 from scripts import config
-config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
+config.read(os.path.join(find_root_directory(), 'config.ini'))
 
 def obtener_proceso_padre(pid):
     """
@@ -55,6 +57,8 @@ def obtener_proceso_padre(pid):
     except psutil.NoSuchProcess:
         print(f"No existe el proceso con PID {pid}.")
         return None
+    except Exception as e:
+        BaseError(0000, str(e))
     
 def obtener_procesos_hijos(pid):
     """
@@ -72,6 +76,8 @@ def obtener_procesos_hijos(pid):
     except psutil.NoSuchProcess:
         print(f"No existe el proceso con PID {pid}.")
         return []
+    except Exception as e:
+        BaseError(0000, str(e))
 
 def is_user_admin():
     """
@@ -82,6 +88,8 @@ def is_user_admin():
     except Exception as e:
         print(f"Error al verificar privilegios: {e}")
         return False
+    except Exception as e:
+        BaseError(0000, str(e))
 
 def run_as_admin():
     """
@@ -130,6 +138,8 @@ def verificar_instancia_duplicada(script_name):
                     return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
+        except Exception as e:
+            BaseError(0000, str(e))
     
     # Si no encontramos una instancia duplicada, devolvemos False
     return False
@@ -176,7 +186,7 @@ def main():
         main_window = MainWindow()
         sys.exit(app.exec_())
     except Exception as e:
-        logging.critical(e)
+        BaseError(3000, str(e), "critical")
 
 def config_content():
     for section in config.sections():
@@ -186,8 +196,8 @@ def config_content():
             logging.debug(f'Subsection: {key}, Value: {value}')
 
 def config_log_console():
-    log_file_path = os.path.join(encontrar_directorio_raiz(), 'logs', 'console_log.txt')
-    logging.debug(encontrar_directorio_raiz())
+    log_file_path = os.path.join(find_root_directory(), 'logs', 'console_log.txt')
+    logging.debug(find_root_directory())
     logging.debug(sys.executable)
     
     # Asegúrate de que el archivo de log y su directorio existen
