@@ -16,42 +16,40 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-
-from ..utils.errors import *
-from ..utils.file_manager import *
 import logging
 import eventlet
 import os
 from scripts import config
+from scripts.business_logic.device_manager import get_device_info, retry_network_operation
+from scripts.utils.errors import BatteryFailingError, ConnectionFailedError, NetworkError
 from .connection import *
-from .device_manager import *
 
-def actualizar_hora_dispositivos(desde_service = False, emit_progress = None):
-    info_devices = []
+def update_device_time(from_service=False, emit_progress=None):
+    device_info = []
     try:
-        # Obtiene todos los dispositivos en una lista formateada
-        info_devices = obtener_info_dispositivos()
+        # Get all devices in a formatted list
+        device_info = get_device_info()
     except Exception as e:
         logging.error(e)
 
-    if info_devices:
+    if device_info:
         gt = []
-        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
+        config.read(os.path.join(find_root_directory(), 'config.ini'))
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
-        # Crea un pool de green threads
+        # Create a pool of green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
         
-        for info_device in info_devices:
-            # Si el dispositivo se encuentra activo...
-            if eval(info_device["activo"]) or desde_service:
-                logging.debug(info_device)
-                # Lanza una corutina para cada dispositivo activo
+        for info in device_info:
+            # If the device is active...
+            if eval(info["active"]) or from_service:
+                logging.debug(info)
+                # Launch a coroutine for each active device
                 try:
-                    gt.append(pool.spawn(actualizar_hora_dispositivo, info_device))
+                    gt.append(pool.spawn(update_device_time_single, info))
                 except Exception as e:
                     pass
         
-        # Espera a que todas las corutinas en el pool hayan terminado
+        # Wait for all coroutines in the pool to finish
         for g in gt:
             try:
                 g.wait()
@@ -61,12 +59,12 @@ def actualizar_hora_dispositivos(desde_service = False, emit_progress = None):
         print('TERMINE HORA!')
         logging.debug('TERMINE HORA!')
 
-def actualizar_hora_dispositivo(info_device):
+def update_device_time_single(info):
     try:
-        reintentar_operacion_de_red(actualizar_hora, args=(info_device['ip'], 4370, info_device['communication'],))
-    except IntentoConexionFallida as e:
-        raise ConexionFallida(info_device['nombre_modelo'], info_device['punto_marcacion'], info_device['ip'])
-    except HoraValidacionFallida as e:
-        raise HoraDesactualizada(info_device["nombre_modelo"], info_device["punto_marcacion"], info_device["ip"])
+        retry_network_operation(update_time, args=(info['ip'], 4370, info['communication'],))
+    except ConnectionFailedError as e:
+        raise NetworkError(info['model_name'], info['point'], info['ip'])
+    except OutdatedTimeError as e:
+        raise BatteryFailingError(info["model_name"], info["point"], info["ip"])
     except Exception as e:
         raise e

@@ -17,92 +17,87 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from ..utils.errors import *
-from ..utils.file_manager import *
 import logging
-import eventlet
 import os
 from datetime import datetime
+import eventlet
 from zk import ZK, ZK_helper
 from scripts import config
+from scripts.utils.errors import OutdatedTimeError
+from scripts.utils.file_manager import find_root_directory
 
-def conectar(ip, port, communication):
+def connect(ip, port, communication):
     conn = None
     try:
         p_force_udp = True if communication == 'UDP' else False
         zk = ZK(ip, port, ommit_ping=True, force_udp=p_force_udp)
-        logging.info(f'Connecting to device {ip}...')
+        logging.info(f'Conectando al dispositivo {ip}...')
         conn = zk.connect()
-        #logging.info('Disabling device...')
-        #conn.disable_device()
-        logging.info(f'Successfully connected to device {ip}.')
-        #conn.test_voice(index=10)
+        logging.info(f'Conectado exitosamente al dispositivo {ip}')
         logging.debug(f'{ip}: {conn}')
         logging.info(f'{ip} - Platform: {conn.get_platform()}')
         logging.info(f'{ip} - Device name: {conn.get_device_name()}')
         logging.info(f'{ip} - Firmware version: {conn.get_firmware_version()}')
         logging.info(f'{ip} - Old firmware: {conn.get_compat_old_firmware()}')
     except Exception as e:
-        raise IntentoConexionFallida(ip) from e
+        raise ConnectionRefusedError from e
     eventlet.sleep(0)
     return conn
 
 def ping_device(ip, port):
     try:
-        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
+        config.read(os.path.join(find_root_directory(), 'config.ini'))
         zk_helper = ZK_helper(ip, port, config['Network_config']['size_ping_test_connection'])
         return zk_helper.test_ping()
     except Exception as e:
-        logging.error(e)
-        return False
+        raise ConnectionRefusedError from e
     
-def finalizar_conexion(conn, ip, port, communication):
-    #logging.info('Enabling device...')
-    #conn.enable_device()
+def end_connection(conn, ip):
     try:
-        logging.info(f'{ip} - Disconnecting device...')
+        logging.info(f'Desconectando dispositivo {ip}...')
         conn.disconnect()
     except Exception as e:
-        raise IntentoConexionFallida(ip) from e
+        logging.warning(e)
+        raise ConnectionRefusedError from e
     eventlet.sleep(0)
     
-def actualizar_hora(conn, desde_service = False):
+def update_time(conn, from_service=False):
     ip = None
     try:
         ip = conn.get_network_params()["ip"]
         zktime = conn.get_time()
-        logging.debug(f'{ip} - Date and hour device: {zktime} - Date and hour machine: {datetime.today()}')
+        logging.debug(f'{ip} - Dispositivo: {zktime} - Maquina local: {datetime.today()}')
         eventlet.sleep(0)
     except Exception as e:
-        raise IntentoConexionFallida(ip) from e
+        raise ConnectionRefusedError from e
 
     try:
-        logging.debug(f'{ip} - Setting updated hour...')
+        logging.debug(f'Actualizando hora del dispositivo {ip}...')
         newtime = datetime.today()
         conn.set_time(newtime)
         eventlet.sleep(0)
     except Exception as e:
-        raise IntentoConexionFallida(ip) from e
+        raise ConnectionRefusedError from e
 
     try:
-        logging.debug(f'{ip} - Validating hour device...')
-        validar_hora(zktime)
+        logging.debug(f'Validando hora del dispositivo {ip}...')
+        validate_time(zktime)
         eventlet.sleep(0)
-    except Exception as e:
-        raise HoraValidacionFallida(ip) from e
+    except OutdatedTimeError as e:
+        raise OutdatedTimeError(ip) from e
 
     return
 
-def validar_hora(zktime):
+def validate_time(zktime):
     newtime = datetime.today()
     if (abs(zktime.hour - newtime.hour) > 0 or
     abs(zktime.minute - newtime.minute) >= 5 or
     zktime.day != newtime.day or
     zktime.month != newtime.month or
     zktime.year != newtime.year):
-        raise Exception('Hours or date between device and machine doesn\'t match')
+        raise OutdatedTimeError()
     
-def obtener_marcaciones(conn, desde_service):
+def get_attendances(conn, from_service):
     attendances = []
     ip = None
     try:
@@ -111,12 +106,12 @@ def obtener_marcaciones(conn, desde_service):
         logging.error(e)
 
     try:
-        logging.info(f'{ip} - Getting attendances...')
+        logging.info(f'Obteniendo marcaciones del dispositivo {ip}...')
         import time
-        tiempo_inicial = time.time()
+        start_time = time.time()
         attendances = conn.get_attendance()
-        tiempo_final = time.time()
-        logging.debug(f'{ip} - Ending attendances operation - Time operation: {tiempo_final - tiempo_inicial} - Time ending: {tiempo_final}')
+        end_time = time.time()
+        logging.debug(f'{ip} - Ending attendances operation - Time operation: {end_time - start_time} - Time ending: {end_time}')
         records = conn.records
         logging.debug(f'{ip} - Length of attendances from device: {records}, Length of attendances: {len(attendances)}')
         if records != len(attendances):
@@ -128,18 +123,18 @@ def obtener_marcaciones(conn, desde_service):
             if new_records != records:
                 raise Exception('Records mismatch')
 
-            tiempo_inicial_2 = time.time()
-            config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
-            # Determina la configuración adecuada según el valor de desde_service
-            config_key = 'clear_attendance_service' if desde_service else 'clear_attendance'
+            start_time_2 = time.time()
+            config.read(os.path.join(find_root_directory(), 'config.ini'))
+            # Determine the appropriate configuration based on the value of from_service
+            config_key = 'clear_attendance_service' if from_service else 'clear_attendance'
             logging.debug(f'clear_attendance: {config['Device_config'][config_key]}')
 
-            # Evalúa la configuración seleccionada
+            # Evaluate the selected configuration
             if eval(config['Device_config'][config_key]):
                 logging.debug(f'{ip} - Clearing attendances...')
                 try:
-                    tiempo_final_2 = time.time()
-                    logging.debug(f'{ip} - Ending clear attendances operation - Time operation: {tiempo_final_2 - tiempo_inicial_2} - Time ending: {tiempo_final_2}')
+                    end_time_2 = time.time()
+                    logging.debug(f'{ip} - Ending clear attendances operation - Time operation: {end_time_2 - start_time_2} - Time ending: {end_time_2}')
                     conn.clear_attendance()
                     eventlet.sleep(0)
                 except Exception as e:
@@ -148,9 +143,9 @@ def obtener_marcaciones(conn, desde_service):
 
             return attendances
     except Exception as e:
-        raise IntentoConexionFallida(ip) from e
+        raise ConnectionRefusedError from e
 
-def obtener_cantidad_marcaciones(conn, desde_service):
+def get_attendance_count(conn, from_service=None):
     ip = None
     try:
         ip = conn.get_network_params()["ip"]
@@ -165,4 +160,18 @@ def obtener_cantidad_marcaciones(conn, desde_service):
         eventlet.sleep(0)
         return records
     except Exception as e:
-        raise IntentoConexionFallida(ip) from e
+        raise ConnectionRefusedError from e
+
+def restart_device(conn, from_service=None):
+    ip = None
+    try:
+        ip = conn.get_network_params()["ip"]
+    except Exception as e:
+        logging.error(e)
+
+    try:
+        logging.info(f"Reiniciando dispositivo {ip}...")
+        conn.restart()
+        return
+    except Exception as e:
+        raise ConnectionRefusedError from e

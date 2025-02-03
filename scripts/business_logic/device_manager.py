@@ -17,134 +17,129 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from ..utils.errors import *
-from ..utils.file_manager import *
 import logging
 import eventlet
 import os
 from scripts import config
-from .connection import *
 import time
 from scripts import config
+from scripts.business_logic.connection import connect, end_connection, ping_device
+from scripts.utils.errors import ConnectionFailedError, OutdatedTimeError
+from scripts.utils.file_manager import find_root_directory, load_from_file
 
-def organizar_info_dispositivos(line):
-    # Dividir la línea en partes utilizando el separador " - "
+def organize_device_info(line):
+    # Split the line into parts using the separator " - "
     parts = line.strip().split(" - ")
-    logging.debug(parts)
-    # Verificar que hay exactamente 6 partes en la línea
+    # Check that there are exactly 7 parts in the line
     if len(parts) == 7:
-        # Retorna un objeto con atributos
+        # Return an object with attributes
         return {
-            "nombre_distrito": parts[0],
-            "nombre_modelo": parts[1],
-            "punto_marcacion": parts[2],
+            "district_name": parts[0],
+            "model_name": parts[1],
+            "point": parts[2],
             "ip": parts[3],
             "id": parts[4],
             "communication": parts[5],
-            "activo": parts[6]
+            "active": parts[6]
         }
     else:
-        # Si no hay exactamente 6 partes, retornar None
+        # If there are not exactly 7 parts, return None
         return None
 
-def obtener_info_dispositivos():
-    # Obtiene la ubicación del archivo de texto
-    file_path = os.path.join(encontrar_directorio_raiz(), 'info_devices.txt')
-    logging.debug(file_path)
-    # Obtiene la info de dispositivos de info_devices.txt
-    data_list = cargar_desde_archivo(file_path)
-    logging.debug(data_list)
-    info_devices = []
-    # Itera los distintos dispositivos
+def get_device_info():
+    # Get the location of the text file
+    file_path = os.path.join(find_root_directory(), 'info_devices.txt')
+    # Get the device info from info_devices.txt
+    data_list = load_from_file(file_path)
+    device_info = []
+    # Iterate over the different devices
     for data in data_list:
-        # A la línea sin formatear, crea un objeto de dispositivo
-        line = organizar_info_dispositivos(data)
-        logging.debug(line)
+        # Create a device object from the unformatted line
+        line = organize_device_info(data)
         if line:
-            # Anexa el dispositivo a la lista de dispositivos
-            info_devices.append(line)
-        logging.debug(info_devices)
-    return info_devices
+            # Append the device to the device list
+            device_info.append(line)
+    return device_info
 
-def ping_devices(emit_progress = None):
-    info_devices = None
+def ping_devices(emit_progress=None):
+    device_info = None
     try:
-        # Obtiene todos los dispositivos en una lista formateada
-        info_devices = obtener_info_dispositivos()
-        logging.debug(info_devices)
+        # Get all devices in a formatted list
+        device_info = get_device_info()
     except Exception as e:
         logging.error(e)
 
     results = {}
 
-    if info_devices:
+    if device_info:
         gt = []
-        info_devices_active = []
-        config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
+        active_devices = []
+        config.read(os.path.join(find_root_directory(), 'config.ini'))
         coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
         
-        # Crea un pool de green threads
+        # Create a pool of green threads
         pool = eventlet.GreenPool(coroutines_pool_max_size)
-        for info_device in info_devices:
-            if eval(info_device["activo"]):
+        for info in device_info:
+            if eval(info["active"]):
                 try:
-                    gt.append(pool.spawn(ping_device, info_device["ip"], 4370))
+                    gt.append(pool.spawn(ping_device, info["ip"], 4370))
                 except Exception as e:
                     pass
-                info_devices_active.append(info_device)
+                active_devices.append(info)
 
-        for info_device_active, g in zip(info_devices_active, gt):
+        for active_device, g in zip(active_devices, gt):
             response = g.wait()
             if response:
                 status = "Conexión exitosa"
             else:
                 status = "Conexión fallida"
 
-            # Guardar la información en results
-            results[info_device_active["ip"]] = {
-                "punto_marcacion": info_device_active["punto_marcacion"],
-                "nombre_distrito": info_device_active["nombre_distrito"],
-                "id": info_device_active["id"],
+            # Save the information in results
+            results[active_device["ip"]] = {
+                "point": active_device["point"],
+                "district_name": active_device["district_name"],
+                "id": active_device["id"],
                 "status": status
             }
-            logging.debug(results[info_device_active["ip"]])
 
-        #failed_connections = {ip: info for ip, info in results.items() if info["status"] == "Conexión fallida"}
         print('TERMINE PING!')
         logging.debug('TERMINE PING!')
 
     return results
 
-def reintentar_operacion_de_red(op, args=(), kwargs={}, intentos_maximos=3, desde_service = False):
-    config.read(os.path.join(encontrar_directorio_raiz(), 'config.ini'))
-    intentos_maximos = int(config['Network_config']['retry_connection'])
+def retry_network_operation(op, args=(), kwargs={}, max_attempts=3, from_service=False):
+    config.read(os.path.join(find_root_directory(), 'config.ini'))
+    max_attempts = int(config['Network_config']['retry_connection'])
     result = None
     conn = None
 
-    for _ in range(intentos_maximos):
+    for _ in range(max_attempts):
         try:
-            logging.debug(f'{args} CONNECTING!')
+            logging.debug(f'{args} CONECTANDO!')
             if conn is None:
-                conn = conectar(*args, **kwargs)
-            logging.debug(f'{args} OPERATION!')
-            result = op(conn, desde_service)
-            logging.debug(f'{args} ENDING!')
-            finalizar_conexion(conn, *args)
-            logging.debug(f'{args} ENDED!')
+                conn = connect(*args)
+            logging.debug(f'{args} OPERACION DE RED!')
+            result = op(conn, from_service)
+            logging.debug(f'{args} FINALIZANDO!')
+            if conn:
+                end_connection(conn, args[0])
+                logging.debug(f'{args} FINALIZADO!')
             break
-        except HoraValidacionFallida as e:
+        except OutdatedTimeError as e:
             raise e
-        except IntentoConexionFallida as e:
+        except ConnectionRefusedError as e:
             conn = None
-            logging.warning(f"{e} - Failed attempt {_ + 1} of {intentos_maximos} for operation {op.__name__}: {e.__cause__}")
             if result:
                 break
-            if _ + 1 == intentos_maximos:
-                raise e
+            error_message = f"Intento fallido {_ + 1} de {max_attempts} del dispositivo {args[0]} para la operacion {op.__name__}"
+            if _ + 1 == max_attempts:
+                raise ConnectionFailedError(error_message) from e
+            else:
+                ConnectionFailedError(error_message)
             eventlet.sleep(0)
         except Exception as e:
             logging.error(e)
             pass
                 
-    logging.debug(f'{args} RESULT!')
+    logging.debug(f'{args} RESULTADO!')
     return result
