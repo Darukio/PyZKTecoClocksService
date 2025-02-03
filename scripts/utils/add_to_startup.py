@@ -21,42 +21,42 @@ import os
 import shutil
 import winreg
 import logging
-from .file_manager import encontrar_directorio_raiz
+from .file_manager import find_root_directory
 
 key_name = 'Gestor Reloj de Asistencias'
 
 def add_to_startup():
-    # Ruta al ejecutable que quieres iniciar automáticamente
-    executable_path = os.path.join(encontrar_directorio_raiz(), "Gestor Reloj de Asistencias.exe")
+    # Path to the executable you want to start automatically
+    executable_path = os.path.join(find_root_directory(), "Gestor Reloj de Asistencias.exe")
     logging.debug(f'executable_path: {executable_path}')
 
-    # Abrir la clave del registro donde se guardan los programas que inician con Windows
+    # Open the registry key where startup programs are stored
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_ALL_ACCESS)
     
-    # Establecer el valor del registro para que inicie tu aplicación al inicio
+    # Set the registry value to start your application at startup
     winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, executable_path)
     
-    # Cerrar la clave del registro
+    # Close the registry key
     winreg.CloseKey(key)
 
 def remove_from_startup():
-    # Intentar abrir la clave del registro donde se guardan los programas que inician con Windows
+    # Try to open the registry key where startup programs are stored
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Run', 0, winreg.KEY_ALL_ACCESS)
         logging.debug(f'key: {key}')
     except FileNotFoundError as e:
         logging.error(e)
-        # Si la clave no existe, salir de la función
+        # If the key does not exist, exit the function
         return
 
-    # Intentar eliminar la entrada de inicio automático si existe
+    # Try to delete the startup entry if it exists
     try:
         winreg.DeleteValue(key, key_name)
     except FileNotFoundError as e:
-        # Si la entrada no existe, también podemos salir de la función
+        # If the entry does not exist, we can also exit the function
         logging.error(e)
     
-    # Cerrar la clave del registro
+    # Close the registry key
     winreg.CloseKey(key)
 
 def is_startup_entry_exists():

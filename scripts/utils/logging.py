@@ -27,7 +27,7 @@ import locale
 locale.setlocale(locale.LC_TIME, "Spanish_Argentina.1252")  # Español de Argentina
 
 def config_log():
-    logs_folder = os.path.join(encontrar_directorio_raiz(), 'logs')
+    logs_folder = os.path.join(find_root_directory(), 'logs')
 
     # Crear la carpeta logs si no existe
     if not os.path.exists(logs_folder):

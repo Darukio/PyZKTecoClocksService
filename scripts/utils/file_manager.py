@@ -24,39 +24,38 @@ import sys
 
 file_lock = threading.Lock()
 
-def cargar_desde_archivo(file_path):
+def load_from_file(file_path):
     '''
-    Carga el contenido desde un archivo de texto.
+    Load content from a text file.
 
     Parameters:
-    - file_path (str): Ruta del archivo de texto.
+    - file_path (str): Path to the text file.
 
     Returns:
-    - List[str]: Lista del contenido del archivo.
+    - List[str]: List of file content.
     '''
-    from .errors import CargaArchivoFallida
 
     content = []
     try:
         with open(file_path, 'r') as file:
-            content = [line.strip() for line in file.readlines()] # Elimina los saltos de línea
-    except CargaArchivoFallida as e:
+            content = [line.strip() for line in file.readlines()] # Remove newlines
+    except Exception as e:
         raise(e)
     return content
 
-def crear_carpeta_y_devolver_ruta(*args):
-    # Directorio base donde se almacenarán las carpetas con la IP
-    ruta_destino = encontrar_directorio_raiz()
+def create_folder_and_return_path(*args):
+    # Base directory where folders with the IP will be stored
+    destination_path = find_root_directory()
     
-    for index, carpeta in enumerate(args, start=1):
-        ruta_destino = os.path.join(ruta_destino, carpeta.lower())
-        if not os.path.exists(ruta_destino):
-            os.makedirs(ruta_destino)
-            logging.debug(f'Se ha creado la carpeta {carpeta} en la ruta {ruta_destino}')
+    for index, folder in enumerate(args, start=1):
+        destination_path = os.path.join(destination_path, folder.lower())
+        if not os.path.exists(destination_path):
+            os.makedirs(destination_path)
+            logging.debug(f'Se ha creado la carpeta {folder} en la ruta {destination_path}')
     
-    return ruta_destino
+    return destination_path
 
-def guardar_marcaciones_en_archivo(attendances, file):
+def save_attendances_to_file(attendances, file):
     file_lock.acquire()
     try:
         with open(file, 'a') as f:
@@ -74,29 +73,29 @@ def guardar_marcaciones_en_archivo(attendances, file):
     finally:
         file_lock.release()
 
-def encontrar_directorio_de_marcador(marcador, path_actual=os.path.abspath(os.path.dirname(__file__))):
-    while path_actual != os.path.dirname(path_actual):  # Mientras no se llegue al root del sistema de archivos
-        #logging.debug(f"Buscando en: {os.path.join(path_actual, marcador)}")
-        if os.path.exists(os.path.join(path_actual, marcador)):
-            return path_actual
-        path_actual = os.path.dirname(path_actual)
+def find_marker_directory(marker, current_path=os.path.abspath(os.path.dirname(__file__))):
+    while current_path != os.path.dirname(current_path):  # While not reaching the root of the file system
+        #logging.debug(f"Buscando en: {os.path.join(current_path, marker)}")
+        if os.path.exists(os.path.join(current_path, marker)):
+            return current_path
+        current_path = os.path.dirname(current_path)
     
     return None
 
-def encontrar_directorio_raiz():
+def find_root_directory():
     path = None
     #logging.debug(f'SE EJECUTA DESDE EXE?: {getattr(sys, 'frozen', False)}')
     if getattr(sys, 'frozen', False):
         path = os.path.dirname(sys.executable)
     else:
-        marcador="main.py"
+        marker = "main.py"
         #logging.debug(path)
-        path = encontrar_directorio_de_marcador(marcador)
+        path = find_marker_directory(marker)
 
     return path
 
-def existe_archivo_en_carpeta(nombre_archivo, carpeta):
+def file_exists_in_folder(file_name, folder):
     from pathlib import Path
-    # Crear un objeto Path para la carpeta y archivo
-    ruta_completa = Path(carpeta) / nombre_archivo
-    return ruta_completa.is_file()
+    # Create a Path object for the folder and file
+    full_path = Path(folder) / file_name
+    return full_path.is_file()
