@@ -21,7 +21,6 @@ import logging
 import eventlet
 import os
 from scripts import config
-import time
 from scripts import config
 from scripts.business_logic.connection import connect, end_connection, ping_device
 from scripts.utils.errors import ConnectionFailedError, OutdatedTimeError
@@ -31,7 +30,7 @@ def organize_device_info(line):
     # Split the line into parts using the separator " - "
     parts = line.strip().split(" - ")
     # Check that there are exactly 7 parts in the line
-    if len(parts) == 7:
+    if len(parts) == 8:
         # Return an object with attributes
         return {
             "district_name": parts[0],
@@ -40,10 +39,11 @@ def organize_device_info(line):
             "ip": parts[3],
             "id": parts[4],
             "communication": parts[5],
-            "active": parts[6]
+            "battery": parts[6],
+            "active": parts[7]
         }
     else:
-        # If there are not exactly 7 parts, return None
+        # If there are not exactly 8 parts, return None
         return None
 
 def get_device_info():
@@ -107,6 +107,39 @@ def ping_devices(emit_progress=None):
 
     return results
 
+def update_device_name(conn, ip):
+    try:
+        device_name = conn.get_device_name()
+        device_name = device_name.replace(" ", "")
+        if not device_name:
+            try:
+                serial_number = conn.get_serialnumber()
+                device_name = serial_number
+                if serial_number == "52355702520030":
+                    device_name = "MultiBio700/ID"
+            except Exception as e:
+                logging.error(f"Error al obtener el nombre del dispositivo {ip}: {e}")
+                device_name = "NoName"
+        try:
+            with open('info_devices.txt', 'r') as file:
+                lines = file.readlines()
+
+            new_lines = []
+            for line in lines:
+                parts = line.strip().split(' - ')
+
+                if parts[3] == ip and parts[1] != device_name:
+                    logging.debug(f'Reemplazando nombre del dispositivo {ip}... {parts[1]} por {device_name}')
+                    parts[1] = device_name
+                new_lines.append(' - '.join(parts) + '\n')
+
+            with open('info_devices.txt', 'w') as file:
+                file.writelines(new_lines)
+        except Exception as e:
+            logging.error(f"Error al reemplazar el nombre del dispositivo: {e}")
+    except Exception as e:
+        pass
+
 def retry_network_operation(op, args=(), kwargs={}, max_attempts=3, from_service=False):
     config.read(os.path.join(find_root_directory(), 'config.ini'))
     max_attempts = int(config['Network_config']['retry_connection'])
@@ -118,27 +151,30 @@ def retry_network_operation(op, args=(), kwargs={}, max_attempts=3, from_service
             logging.debug(f'{args} CONECTANDO!')
             if conn is None:
                 conn = connect(*args)
-            logging.debug(f'{args} OPERACION DE RED!')
-            result = op(conn, from_service)
-            logging.debug(f'{args} FINALIZANDO!')
             if conn:
+                logging.debug(f'{args} OPERACION DE RED!')
+                if not from_service:
+                    update_device_name(conn, args[0])
+                result = op(conn, from_service)
+                logging.debug(f'{args} FINALIZANDO!')
                 end_connection(conn, args[0])
                 logging.debug(f'{args} FINALIZADO!')
-            break
+                break
         except OutdatedTimeError as e:
+            logging.error("2: "+str(e))
             raise e
         except ConnectionRefusedError as e:
             conn = None
             if result:
                 break
-            error_message = f"Intento fallido {_ + 1} de {max_attempts} del dispositivo {args[0]} para la operacion {op.__name__}"
+            error_message = f"Intento fallido {_ + 1} de {max_attempts} del dispositivo {args[0]} para la operacion {op.__name__}: {e.__cause__}"
             if _ + 1 == max_attempts:
                 raise ConnectionFailedError(error_message) from e
             else:
                 ConnectionFailedError(error_message)
             eventlet.sleep(0)
         except Exception as e:
-            logging.error(e)
+            logging.error("3: "+str(e))
             pass
                 
     logging.debug(f'{args} RESULTADO!')

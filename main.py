@@ -24,7 +24,6 @@ eventlet.monkey_patch()
 from schedulerService import check_and_install_service
 import ctypes
 import subprocess
-from scripts.ui.message_box import MessageBox
 from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtWidgets import QApplication
 from scripts.ui.icon_manager import MainWindow
@@ -34,8 +33,8 @@ import sys
 import os
 import psutil
 
-# Versión del programa
-VERSION = "v2.2.39"
+# Versión del servicio
+VERSION = "v1.0.1"
 
 # Para leer un archivo INI
 from scripts import config
@@ -125,7 +124,6 @@ def verificar_instancia_duplicada(script_name):
                     if proc.info['pid'] != os.getpid():
                         # Si encontramos otra instancia que no es la actual
                         logging.info(f"Instancia duplicada encontrada: {proc.info['cmdline']}")
-                        MessageBox(QMessageBox.Warning, "Ya hay una instancia de la aplicación en ejecución.").exec_()
                         return True
             if proc.info['name'] == script_basename:
                 if (
@@ -166,8 +164,8 @@ def main():
         run_as_admin()
 
     # Verificar si ya está ejecutándose una instancia duplicada
-    if verificar_instancia_duplicada(script_name):
-        cerrar_instancia_duplicada()
+    # if verificar_instancia_duplicada(script_name):
+    #    cerrar_instancia_duplicada()
 
     check_and_install_service()
 

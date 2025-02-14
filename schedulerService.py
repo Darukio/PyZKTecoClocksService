@@ -25,7 +25,7 @@ svc_description = "Servicio para sincronización de tiempo y recuperación de da
 
 locale.setlocale(locale.LC_TIME, "Spanish_Argentina.1252")  # Español de Argentina
 
-class OperationThread(QThread):
+class OperationThreadWithoutProgress(QThread):
     def __init__(self, operation_function, parent=None):
         super().__init__(parent)
         self.operation_function = operation_function
@@ -47,9 +47,8 @@ class SchedulerService(win32serviceutil.ServiceFramework):
         try:
             win32serviceutil.ServiceFramework.__init__(self, args)
 
-            logs_folder = os.path.join(self.path, 'logs')
+            logs_folder = os.path.join(find_root_directory(), 'logs')
 
-            # Crear la carpeta logs si no existe
             if not os.path.exists(logs_folder):
                 os.makedirs(logs_folder)
 
@@ -57,14 +56,43 @@ class SchedulerService(win32serviceutil.ServiceFramework):
             date_string = new_time.strftime("%Y-%b")
             logs_month_folder = os.path.join(logs_folder, date_string)
 
-            # Crear la carpeta logs_month si no existe
             if not os.path.exists(logs_month_folder):
                 os.makedirs(logs_month_folder)
 
-            debug_log_file = os.path.join(logs_month_folder, 'scheduler_debug.log')
-            # Configurar el sistema de registros básico para program_debug.log
-            logging.basicConfig(filename=debug_log_file, level=logging.DEBUG,
-                                format='%(asctime)s - %(levelname)s - %(message)s')
+            debug_log_file = os.path.join(logs_month_folder, 'service_debug.log')
+            error_log_file = os.path.join(logs_month_folder, 'service_error.log')
+
+            # Verificar si ya hay handlers configurados antes de llamar a basicConfig
+            if not logging.getLogger().hasHandlers():
+                logging.basicConfig(
+                    filename=debug_log_file,
+                    level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s'
+                )
+                logging.debug('1')
+
+            # Verificar si el manejador de errores ya está agregado
+            error_handler_exists = any(isinstance(h, logging.FileHandler) and h.baseFilename == error_log_file
+                                    for h in logging.getLogger().handlers)
+
+            if not error_handler_exists:
+                try:
+                    logging.debug('2')
+                    error_logger = logging.FileHandler(error_log_file)
+                    error_logger.setLevel(logging.WARNING)
+                    error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+                    error_logger.setFormatter(error_formatter)
+                    logging.getLogger().addHandler(error_logger)
+                except Exception as e:
+                    pass
+
+            # Agregar un StreamHandler si no hay logs configurados
+            if not logging.getLogger().handlers:
+                logging.debug('3')
+                console_handler = logging.StreamHandler(sys.stdout)
+                console_handler.setLevel(logging.DEBUG)
+                console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+                logging.getLogger().addHandler(console_handler)
 
             if len(args) > 1:  # Comprobamos si se proporcionó un argumento extra
                 self.path = "".join(args[1:])  # El primer argumento es el nombre del servicio, el segundo será la ruta
@@ -87,30 +115,22 @@ class SchedulerService(win32serviceutil.ServiceFramework):
             logging.error(e)
 
     def main(self):
-        print('Starting Service...')
-        
         logging.debug("Path: "+os.path.abspath(__file__))
-        print("Path: "+os.path.abspath(__file__))
         
         try:
             self.configure_schedule()
         except Exception as e:
             logging.error(e)
-        
-        try:
-            logging.debug(f'Tareas programadas: {str(len(schedule.get_jobs()))}\n{str(schedule.get_jobs())}')
-            while self.is_running:
+
+        logging.debug(f'Tareas programadas: {str(len(schedule.get_jobs()))}\n{str(schedule.get_jobs())}')
+        while self.is_running:
+            try:
                 logging.debug('Ejecutando tarea programada...')
                 self.ReportServiceStatus(win32service.SERVICE_RUNNING)
                 schedule.run_pending()
                 time.sleep(60)
-        except KeyboardInterrupt:
-            # Manejar la interrupción del teclado (Ctrl + C)
-            logging.error('Interrupción de teclado detectada, deteniendo el servicio...')
-            self.SvcStop()
-        except Exception as e:
-            logging.error('Error inesperado: %s', e)
-            self.SvcStop()
+            except Exception as e:
+                logging.error('Error inesperado: %s %s', e, e.__cause__)
 
     def configure_schedule(self):
         '''
@@ -149,18 +169,28 @@ class SchedulerService(win32serviceutil.ServiceFramework):
         if manage_hours:
             # Iterate over execution times for manage_device_attendances
             for hour_to_perform in manage_hours:
-                schedule.every().day.at(hour_to_perform).do(manage_device_attendances, from_service=True)
+                schedule.every().day.at(hour_to_perform).do(
+                    lambda: safe_execute(manage_device_attendances, from_service=True)
+                )
 
         if update_hours:
             # Iterate over execution times for update_device_time
             for hour_to_perform in update_hours:
-                schedule.every().day.at(hour_to_perform).do(update_device_time, from_service=True)
+                schedule.every().day.at(hour_to_perform).do(
+                    lambda: safe_execute(update_device_time, from_service=True)
+                )
+
+def safe_execute(func, *args, **kwargs):
+    try:
+        func(*args, **kwargs)
+    except Exception as e:
+        logging.error(f"Error ejecutando {func.__name__}: {e}")
 
 def create_operation_thread(operation_function):
     '''
     Create a thread to execute an operation.
     '''
-    thread = OperationThread(operation_function)
+    thread = OperationThreadWithoutProgress(operation_function)
     thread.start()
 
 def service_is_installed(service_name):

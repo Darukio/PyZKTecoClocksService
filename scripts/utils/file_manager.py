@@ -18,6 +18,7 @@
 """
 
 import os
+import re
 import threading
 import logging
 import sys
@@ -43,12 +44,20 @@ def load_from_file(file_path):
         raise(e)
     return content
 
+def sanitize_folder_name(name):
+    """Replaces special characters with '-' and avoids multiple consecutive '-'."""
+    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '-', name)  # Replace invalid characters
+    sanitized = re.sub(r'-+', '-', sanitized)  # Prevent multiple consecutive '-'
+    return sanitized.strip('-')  # Avoid leading or trailing '-'
+
 def create_folder_and_return_path(*args):
-    # Base directory where folders with the IP will be stored
+    # Base directory where folders will be stored
     destination_path = find_root_directory()
     
-    for index, folder in enumerate(args, start=1):
-        destination_path = os.path.join(destination_path, folder.lower())
+    for folder in args:
+        sanitized_folder = sanitize_folder_name(folder.lower())  # Clean the folder name
+        destination_path = os.path.join(destination_path, sanitized_folder)
+        
         if not os.path.exists(destination_path):
             os.makedirs(destination_path)
             logging.debug(f'Se ha creado la carpeta {folder} en la ruta {destination_path}')

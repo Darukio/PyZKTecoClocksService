@@ -41,7 +41,7 @@ def config_log():
     if not os.path.exists(logs_month_folder):
         os.makedirs(logs_month_folder)
 
-    debug_log_file = os.path.join(logs_month_folder, 'program_debug.log')
+    debug_log_file = os.path.join(logs_month_folder, 'icon_for_service_debug.log')
 
     # Configurar el sistema de registros básico para program_debug.log
     logging.basicConfig(
@@ -51,7 +51,7 @@ def config_log():
     )
 
     # Configurar un controlador adicional para 'program_error.log'
-    error_log_file = os.path.join(logs_month_folder, 'program_error.log')
+    error_log_file = os.path.join(logs_month_folder, 'icon_for_service_error.log')
     error_logger = logging.FileHandler(error_log_file)
     error_logger.setLevel(logging.WARNING)
 

@@ -25,8 +25,21 @@ from PyQt5.QtWidgets import QMessageBox
 from scripts.utils.file_manager import find_marker_directory
 
 # Load errors from JSON
-with open(os.path.join(find_marker_directory("json"), "json", "errors.json"), encoding="utf-8") as f:
-    ERRORS = json.load(f)
+# with open(os.path.join(find_marker_directory("json"), "json", "errors.json"), encoding="utf-8") as f:
+#    ERRORS = json.load(f)
+
+ERRORS = {
+    "0000": "Error desconocido",
+    "1000": "Error al conectar con el dispositivo",
+    "1001": "Error de red",
+    "2000": "Error de dispositivo",
+    "2001": "Error de pila fallando",
+    "2002": "Error al reiniciar el dispositivo",
+    "3000": "Error de aplicacion",
+    "3001": "Error de carga de archivo",
+    "3500": "Error de interfaz grafica",
+    "3501": "Error al inicializar ventana",
+}
 
 class BaseError(Exception):
     """Base class for errors with logging support."""
@@ -71,4 +84,5 @@ class OutdatedTimeError(Exception):
 
 class BatteryFailingError(BaseError):
     def __init__(self, model_name="", point="", ip=""):
+        self.ip = ip
         super().__init__(2001, f'{model_name} - {point} - {ip}')

@@ -35,10 +35,13 @@ def connect(ip, port, communication):
         conn = zk.connect()
         logging.info(f'Conectado exitosamente al dispositivo {ip}')
         logging.debug(f'{ip}: {conn}')
-        logging.info(f'{ip} - Platform: {conn.get_platform()}')
-        logging.info(f'{ip} - Device name: {conn.get_device_name()}')
-        logging.info(f'{ip} - Firmware version: {conn.get_firmware_version()}')
-        logging.info(f'{ip} - Old firmware: {conn.get_compat_old_firmware()}')
+        try:
+            logging.info(f'{ip} - Platform: {conn.get_platform()}')
+            logging.info(f'{ip} - Device name: {conn.get_device_name()}')
+            logging.info(f'{ip} - Firmware version: {conn.get_firmware_version()}')
+            logging.info(f'{ip} - Old firmware: {conn.get_compat_old_firmware()}')
+        except Exception as e:
+            pass
     except Exception as e:
         raise ConnectionRefusedError from e
     eventlet.sleep(0)

@@ -21,9 +21,9 @@ import eventlet
 from scripts import config
 from scripts.business_logic.connection import get_attendance_count, get_attendances
 from scripts.business_logic.device_manager import get_device_info, retry_network_operation
-from scripts.utils.errors import ConnectionFailedError, NetworkError
+from scripts.utils.errors import BatteryFailingError, ConnectionFailedError, NetworkError
 from scripts.utils.file_manager import create_folder_and_return_path, find_root_directory, save_attendances_to_file
-from .hour_manager import update_device_time_single
+from .hour_manager import update_battery_status, update_device_time_single
 from datetime import datetime
 import os
 import threading
@@ -66,50 +66,52 @@ def manage_device_attendances(from_service=False, emit_progress=None):
     results = {}
 
     if device_info:
-        gt = []
-        active_devices = []
-        config.read(os.path.join(find_root_directory(), 'config.ini'))
-        coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
+        try:
+            gt = []
+            active_devices = []
+            config.read(os.path.join(find_root_directory(), 'config.ini'))
+            coroutines_pool_max_size = int(config['Cpu_config']['coroutines_pool_max_size'])
 
-        # Create a pool of green threads
-        pool = eventlet.GreenPool(coroutines_pool_max_size)
-        state = SharedState()
+            # Create a pool of green threads
+            pool = eventlet.GreenPool(coroutines_pool_max_size)
+            state = SharedState()
 
-        for info in device_info:
-            logging.debug(f'info_device["active"]: {eval(info["active"])} - from_service: {from_service}')
-            if eval(info["active"]) or from_service:
-                logging.debug(f'info_device_active: {info}')
-                active_devices.append(info)
+            for info in device_info:
+                logging.debug(f'info_device["active"]: {eval(info["active"])} - from_service: {from_service}')
+                if eval(info["active"]) or from_service:
+                    logging.debug(f'info_device_active: {info}')
+                    active_devices.append(info)
 
-        # Set the total number of devices in the shared state
-        state.set_total_devices(len(active_devices))
-                
-        for active_device in active_devices:
-            try:
-                gt.append(pool.spawn(manage_device_attendance_single, active_device, from_service, emit_progress, state))
-            except Exception as e:
-                pass
-        
-        for active_device, g in zip(active_devices, gt):
-            logging.debug(f'Processing {active_device}')
-            try:
-                logging.debug(g)
-                attendance_count = g.wait()
-            except Exception as e:
-                logging.error(e)
-                attendance_count = 'Conexión fallida'
+            # Set the total number of devices in the shared state
+            state.set_total_devices(len(active_devices))
+                    
+            for active_device in active_devices:
+                try:
+                    gt.append(pool.spawn(manage_device_attendance_single, active_device, from_service, emit_progress, state))
+                except Exception as e:
+                    pass
+            
+            for active_device, g in zip(active_devices, gt):
+                logging.debug(f'Processing {active_device}')
+                try:
+                    logging.debug(g)
+                    attendance_count = g.wait()
+                except Exception as e:
+                    logging.error(e)
+                    attendance_count = 'Conexión fallida'
 
-            # Save the information in results
-            results[active_device["ip"]] = {
-                "point": active_device["point"],
-                "district_name": active_device["district_name"],
-                "id": active_device["id"],
-                "attendance_count": str(attendance_count)
-            }
-            logging.debug(results[active_device["ip"]])
+                # Save the information in results
+                results[active_device["ip"]] = {
+                    "point": active_device["point"],
+                    "district_name": active_device["district_name"],
+                    "id": active_device["id"],
+                    "attendance_count": str(attendance_count)
+                }
+                logging.debug(results[active_device["ip"]])
 
-        print('TERMINE MARCACIONES!')
-        logging.debug('TERMINE MARCACIONES!')
+            logging.debug('TERMINE MARCACIONES!')
+        except Exception as e:
+            logging.error(e)
 
     return results
 
@@ -129,7 +131,11 @@ def manage_device_attendance_single(info, from_service, emit_progress, state):
 
         try:
             update_device_time_single(info)
-        except Exception as e:
+        except NetworkError as e:
+            pass
+        except BatteryFailingError as e:
+            update_battery_status(e.ip)
+        except  Exception as e:
             logging.error(e)
 
         logging.debug(f'TERMINANDO MARCACIONES DISP {info["ip"]}')

@@ -5,8 +5,8 @@
     "2000": "Error de dispositivo",
     "2001": "Error de pila fallando",
     "2002": "Error al reiniciar el dispositivo",
-    "3000": "Error de aplicación",
+    "3000": "Error de aplicacion",
     "3001": "Error de carga de archivo",
-    "3002": "Error de interfaz gráfica",
-    "3003": "Error al inicializar ventana"
+    "3500": "Error de interfaz grafica",
+    "3501": "Error al inicializar ventana"
 }
