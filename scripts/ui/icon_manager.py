@@ -16,6 +16,13 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+
+import eventlet
+
+from scripts.common.utils.errors import BaseError
+eventlet.monkey_patch()
+original_socket = eventlet.patcher.original('socket')
+import sys
 import win32serviceutil
 import logging
 import os
@@ -23,39 +30,82 @@ import time
 import win32service
 
 from schedulerService import check_and_install_service
-from ..utils.add_to_startup import *
-from ..utils.errors import *
-from ..utils.file_manager import *
-from ..business_logic.attendances_manager import *
-from ..business_logic.hour_manager import *
 from scripts import config
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
-from ..utils.add_to_startup import is_startup_entry_exists
+from scripts.common.utils.add_to_startup import add_to_startup, is_startup_entry_exists, remove_from_startup
 from PyQt5.QtWidgets import QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
 from PyQt5.QtCore import pyqtSlot
 
+from scripts.common.utils.file_manager import find_marker_directory, find_root_directory
+from scripts.common.utils.system_utils import exit_duplicated_instance, is_user_admin, run_as_admin, verify_duplicated_instance
+
+from PyQt5.QtCore import QThread, pyqtSignal
+
 config.read(os.path.join(find_root_directory(), 'config.ini'))  # Read the config.ini configuration file
+
+# This class runs in a separate thread to listen for messages from the service.
+class SocketListenerThread(QThread):
+    message_received = pyqtSignal(str)
+
+    def __init__(self, host='localhost', port=5000, parent=None):
+        super().__init__(parent)
+        self.host = host
+        self.port = port
+
+    def run(self):
+        logging.debug("Hola! El servidor de sockets está intentando iniciar")
+        try:
+            server = original_socket.socket(original_socket.AF_INET, original_socket.SOCK_STREAM)
+            logging.debug("SERVER: "+str(server))
+            server.bind((self.host, self.port))
+            server.listen(5)
+            while True:
+                logging.debug("Corriendo servidor de sockets...")
+                client, addr = server.accept()
+                data = client.recv(1024)
+                if data:
+                    message = data.decode('utf-8').strip()
+                    logging.debug(f"Mensaje recibido: {message}")
+                    self.message_received.emit(message)
+                client.close()
+        except Exception as e:
+            logging.error(f"Error en el servidor de sockets: {e}")
 
 class MainWindow(QMainWindow):
     MAX_RETRIES = 30  # Maximum number of retries to start the service
     service_name = "GESTOR_RELOJ_ASISTENCIA"  # Service name
 
     def __init__(self):
-        super().__init__()
-        self.is_running = False  # Variable to indicate if the application is running
-        logging.debug(config)
-        self.checked_automatic_init = is_startup_entry_exists()
+        try:
+            super().__init__()
+            self.is_running = False  # Variable to indicate if the application is running
+            self.checked_automatic_init = is_startup_entry_exists("Servicio Reloj de Asistencias")
 
-        self.tray_icon = None  # Variable to store the QSystemTrayIcon
-        self.__init_ui()  # Initialize the user interface
+            if not is_user_admin():
+                run_as_admin()
 
-        self.__opt_start_execution()
+            if verify_duplicated_instance(sys.argv[0]):
+                exit_duplicated_instance()
+
+            check_and_install_service()
+
+            self.tray_icon = None  # Variable to store the QSystemTrayIcon
+            self.__init_ui()  # Initialize the user interface
+
+            # Start the socket listener in a new thread.
+            self.socket_listener_thread = SocketListenerThread(parent=self)
+            self.socket_listener_thread.message_received.connect(self.handle_message_received)
+            self.socket_listener_thread.start()
+
+            self.__opt_start_execution()
+        except Exception as e:
+            logging.error(f"Error al iniciar la aplicación: {e}")
+
+    def handle_message_received(self, message):
+        self.set_icon_color(self.tray_icon, message)
 
     def __init_ui(self):
-        self.setWindowTitle('Ventana principal')  # Main window title
-        self.setGeometry(100, 100, 400, 300)  # Main window geometry (position and size)
-
         # Create and configure the system tray icon
         self.color_icon = "red"  # Initial icon color
         self.__create_tray_icon()  # Create the system tray icon        
@@ -79,6 +129,12 @@ class MainWindow(QMainWindow):
             menu.addAction(self.__create_action("Reiniciar servicio", lambda: self.__opt_restart_execution()))  # Action to restart execution
             menu.addAction(self.__create_action("Reinstalar servicio", lambda: self.__opt_reinstall_service()))  # Action to reinstall the service
             menu.addSeparator()  # Context menu separator
+            # Checkbox as QAction with checkable state
+            clear_attendance_action = QAction("Eliminar marcaciones", menu)
+            clear_attendance_action.setCheckable(True)  # Make the QAction checkable
+            clear_attendance_action.setChecked(self.checked_clear_attendance)  # Set initial checkbox state
+            clear_attendance_action.triggered.connect(self.__opt_toggle_checkbox_clear_attendance)  # Connect action to toggle checkbox state
+            menu.addAction(clear_attendance_action)  # Add action to the menu
             # Action to toggle the checkbox state
             automatic_init_action = QAction('Iniciar automáticamente', menu)
             automatic_init_action.setCheckable(True)
@@ -94,6 +150,7 @@ class MainWindow(QMainWindow):
 
         self.tray_icon.show()  # Show the system tray icon
 
+    @pyqtSlot()
     def __opt_reinstall_service(self):
         try:
             self.__opt_stop_execution()
@@ -127,6 +184,22 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error al reinstalar el servicio: {e}")
 
+    @pyqtSlot()
+    def __opt_toggle_checkbox_clear_attendance(self):
+        """
+        Option to toggle the state of the clear attendance checkbox.
+        """
+        self.checked_clear_attendance = not self.checked_clear_attendance  # Invert the current checkbox state
+        logging.debug(f"Status checkbox: {self.checked_clear_attendance}")  # Debug log: current checkbox state
+        # Modify the value of the desired field in the configuration file
+        config['Device_config']['clear_attendance_service'] = str(self.checked_clear_attendance)
+        # Write the changes back to the configuration file
+        try:
+            with open('config.ini', 'w') as config_file:
+                config.write(config_file)
+        except Exception as e:
+            BaseError(3001, str(e))
+
     def __create_action(self, text, function):
         """
         Create an action for the context menu.
@@ -142,7 +215,7 @@ class MainWindow(QMainWindow):
         action.triggered.connect(function)  # Connect the action to the provided function
         return action  # Return the created action
     
-    def __set_icon_color(self, icon, color):
+    def set_icon_color(self, icon, color):
         """
         Change the color of the system tray icon.
 
@@ -208,7 +281,7 @@ class MainWindow(QMainWindow):
 
         if success:
             self.__update_running_service(True)  # Mark that the application is running
-            self.__set_icon_color(self.tray_icon, "green")  # Set the icon color to green
+            self.set_icon_color(self.tray_icon, "green")  # Set the icon color to green
         else:
             logging.critical("No se pudo iniciar el servicio despues de multiples intentos")
 
@@ -252,7 +325,7 @@ class MainWindow(QMainWindow):
                     logging.debug("Se detuvo el servicio")
                     self.tray_icon.showMessage("Notificación", 'El servicio se detuvo correctamente', QSystemTrayIcon.Information)
         if self.color_icon != "yellow":
-            self.__set_icon_color(self.tray_icon, "red")  # Set the icon color to red
+            self.set_icon_color(self.tray_icon, "red")  # Set the icon color to red
 
     def check_service_stopped(self, service_name):
         try:
@@ -299,10 +372,10 @@ class MainWindow(QMainWindow):
 
             if self.checked_automatic_init:
                 logging.debug('add_to_startup')
-                add_to_startup()
+                add_to_startup("Servicio Reloj de Asistencias")
             else:
                 logging.debug('remove_from_startup')
-                remove_from_startup()
+                remove_from_startup("Servicio Reloj de Asistencias")
 
     @pyqtSlot()
     def __opt_exit_icon(self):
@@ -310,23 +383,5 @@ class MainWindow(QMainWindow):
         Option to exit the application.
         """
         if self.tray_icon:
-            # if len(schedule.get_jobs()) >= 1:
-            #self.__opt_stop_execution()  # Stop the execution if there are scheduled jobs
             self.tray_icon.hide()  # Hide the system tray icon
             QApplication.quit()  # Exit the application
-
-    def thread_manage_device_attendances(self):
-        self.__set_icon_color(self.tray_icon, "yellow")
-        try:
-            manage_device_attendances(from_service=True)
-        except Exception as e:
-            logging.critical(e)
-        self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restore icon color based on execution status
-
-    def thread_update_device_time(self):
-        self.__set_icon_color(self.tray_icon, "yellow")
-        try:
-            update_device_time(from_service=True)
-        except Exception as e:
-            logging.critical(e)
-        self.__set_icon_color(self.tray_icon, "green" if self.is_running else "red")  # Restore icon color based on execution status

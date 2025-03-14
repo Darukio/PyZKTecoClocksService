@@ -1,4 +1,3 @@
-git+https://github.com/Darukio/pyzk.git
 eventlet
 pillow
 pyinstaller
@@ -6,3 +5,4 @@ pyqt5
 pywin32
 schedule
 psutil
+python-dateutil
