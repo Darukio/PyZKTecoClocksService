@@ -1,0 +1,15 @@
+{
+    "0000": "Error desconocido",
+    "1000": "Error de red",
+    "1001": "Error al conectar con el dispositivo",
+    "2000": "Error desconocido de dispositivo",
+    "2001": "Error de pila fallando",
+    "2002": "Error al reiniciar el dispositivo",
+    "2003": "Error de fecha incorrecta en marcacion",
+    "2004": "Los registros de marcaciones no coinciden con la cantidad de marcaciones obtenidas",
+    "2005": "Error al obtener las marcaciones del dispositivo",
+    "3000": "Error de aplicacion",
+    "3001": "Error de carga de archivo",
+    "3500": "Error de interfaz grafica",
+    "3501": "Error al inicializar ventana"
+}
