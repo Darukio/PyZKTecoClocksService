@@ -19,8 +19,8 @@
 
 import eventlet
 eventlet.monkey_patch()
-original_socket = eventlet.patcher.original('socket')
 from datetime import datetime
+import socket
 import sys
 import os
 import time
@@ -31,11 +31,10 @@ import win32event
 import logging
 import servicemanager
 import locale
-from PyQt5.QtCore import QThread
 
-from scripts.common.business_logic.attendances_manager import manage_device_attendances
-from scripts.common.business_logic.hour_manager import update_devices_time
+from scripts.business_logic.service_manager import AttendancesManager, HourManager
 from scripts.common.utils.file_manager import file_exists_in_folder, find_root_directory, load_from_file
+from version import SERVICE_VERSION
 
 svc_python_class = "schedulerService.SchedulerService"
 svc_name = "GESTOR_RELOJ_ASISTENCIA"
@@ -43,38 +42,6 @@ svc_display_name = "GESTOR RELOJ DE ASISTENCIAS"
 svc_description = "Servicio para sincronización de tiempo y recuperación de datos de asistencia."
 
 locale.setlocale(locale.LC_TIME, "Spanish_Argentina.1252")  # Español de Argentina
-
-def configure_logging(debug_log_file, error_log_file):
-    # Verificar si ya hay handlers configurados antes de llamar a basicConfig
-    if not logging.getLogger().hasHandlers():
-        logging.basicConfig(
-            filename=debug_log_file if debug_log_file else "default_debug.log",
-            level=logging.DEBUG,
-            format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s'
-        )
-
-    # Verificar si el manejador de errores ya está agregado
-    error_handler_exists = any(isinstance(h, logging.FileHandler) and h.baseFilename == error_log_file
-                               for h in logging.getLogger().handlers)
-
-    if not error_handler_exists:
-        try:
-            error_logger = logging.FileHandler(error_log_file)
-            error_logger.setLevel(logging.WARNING)
-            error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            error_logger.setFormatter(error_formatter)
-            logging.getLogger().addHandler(error_logger)
-        except Exception as e:
-            logging.error(f"Error al configurar el manejador de errores: {e}")
-
-    # Agregar un StreamHandler si no hay logs configurados
-    if not any(isinstance(h, logging.StreamHandler) for h in logging.getLogger().handlers):
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.DEBUG)
-        console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-        logging.getLogger().addHandler(console_handler)
-
-    print(f"stdout: {sys.stdout}, stderr: {sys.stderr}")
 
 class SchedulerService(win32serviceutil.ServiceFramework):
     _svc_name_ = svc_name
@@ -85,6 +52,23 @@ class SchedulerService(win32serviceutil.ServiceFramework):
     current_log_month = datetime.today().strftime("%Y-%b")
 
     def __init__(self, args):
+        """
+        Initializes the scheduler service.
+        Args:
+            args (list): A list of arguments passed to the service. The first argument is mandatory, 
+                         and additional arguments can be used to specify a custom path.
+        Attributes:
+            path (str): A custom path provided as an additional argument, if any.
+            hWaitStop (handle): A handle to the event object used to signal service stop.
+        Raises:
+            Exception: Logs any exception that occurs during initialization.
+        This method performs the following:
+            - Initializes the base ServiceFramework class.
+            - Creates a logs folder in the root directory if it does not exist.
+            - Creates a subfolder for the current log month within the logs folder.
+            - Configures logging for debug and error logs using the specified log files.
+            - Sets up a handle for the service stop event.
+        """
         try:
             win32serviceutil.ServiceFramework.__init__(self, args)
 
@@ -98,25 +82,41 @@ class SchedulerService(win32serviceutil.ServiceFramework):
             if not os.path.exists(logs_month_folder):
                 os.makedirs(logs_month_folder)
 
-            debug_log_file = os.path.join(logs_month_folder, 'service_debug.log')
-            error_log_file = os.path.join(logs_month_folder, 'service_error.log')
+            debug_log_file = os.path.join(logs_month_folder, 'servicio_reloj_de_asistencias_'+SERVICE_VERSION+'_debug.log')
+            error_log_file = os.path.join(logs_month_folder, 'servicio_reloj_de_asistencias_'+SERVICE_VERSION+'_error.log')
 
-            configure_logging(debug_log_file, error_log_file)
+            self.configure_logging(debug_log_file, error_log_file)
 
-            if len(args) > 1:  # Comprobamos si se proporcionó un argumento extra
-                self.path = "".join(args[1:])  # El primer argumento es el nombre del servicio, el segundo será la ruta
-                # Abrir el archivo en modo escritura
+            if len(args) > 1:  # Check if an extra argument was provided
+                self.path = "".join(args[1:])
             self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
         except Exception as e:
             logging.error(e)
 
     def SvcStop(self):
+        """
+        Stops the service by setting the running flag to False, reporting the service
+        status as stopping, and signaling the stop event. Additionally, logs the service
+        stop event for informational purposes.
+
+        This method is typically called by the service control manager to stop the service.
+        """
         self.is_running = False
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         win32event.SetEvent(self.hWaitStop)
         servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STOPPED, (self._svc_name_, ''))
         
     def SvcDoRun(self):
+        """
+        Executes the main logic of the service when it is started.
+
+        This method is called when the service is run. It logs the service start event
+        and then calls the `main` method to perform the primary operations of the service.
+        If an exception occurs during execution, it is logged as an error.
+
+        Raises:
+            Exception: Logs any exception that occurs during the execution of the service.
+        """
         try:
             servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ''))
             self.main()
@@ -124,7 +124,30 @@ class SchedulerService(win32serviceutil.ServiceFramework):
             logging.error(e)
 
     def main(self):
-        logging.debug("Path: "+os.path.abspath(__file__))
+        """
+        Main method to manage the scheduling service.
+        This method configures the schedule, monitors and executes scheduled jobs,
+        and handles logging reconfiguration. It also updates the status icon based
+        on job execution status.
+        Workflow:
+        1. Configures the schedule using `self.configure_schedule()`.
+        2. Continuously runs while `self.is_running` is True:
+            - Reconfigures logging if needed (e.g., on month change).
+            - Checks and executes pending scheduled jobs.
+            - Updates the status icon to indicate job execution status.
+            - Sleeps for 60 seconds between iterations.
+        Exception Handling:
+        - Logs any errors encountered during schedule configuration, logging
+          reconfiguration, job execution, or icon updates.
+        Attributes:
+        - `self.is_running` (bool): Controls the execution loop.
+        - `schedule.get_jobs()` (list): Retrieves the list of scheduled jobs.
+        - `self.send_icon_update(status: str)`: Updates the status icon with the
+          given color ('yellow' for running, 'green' for idle).
+        Raises:
+        - Logs unexpected exceptions during execution.
+        """
+        #logging.debug("Path: "+os.path.abspath(__file__))
         
         try:
             self.configure_schedule()
@@ -132,6 +155,7 @@ class SchedulerService(win32serviceutil.ServiceFramework):
             logging.error(e)
 
         logging.debug(f'Tareas programadas: {str(len(schedule.get_jobs()))}\n{str(schedule.get_jobs())}')
+        
         while self.is_running:
             try:
                 self.reconfigure_logging_if_needed()  # Check for month change.
@@ -143,7 +167,7 @@ class SchedulerService(win32serviceutil.ServiceFramework):
                 job_running = False
 
                 for job in schedule.get_jobs():
-                    logging.debug(f'Próxima ejecución: {job.next_run} - Hora actual: {datetime.now()} - Diferencia: {job.next_run - datetime.now()}')
+                    #logging.debug(f'Proxima ejecucion: {job.next_run} - Hora actual: {datetime.now()} - Diferencia: {job.next_run - datetime.now()}')
                     if job.next_run <= datetime.now():
                         logging.debug(f'Ejecutando tarea...')
                         self.send_icon_update('yellow')
@@ -159,42 +183,73 @@ class SchedulerService(win32serviceutil.ServiceFramework):
                 if job_running:
                     self.send_icon_update('green')
             except Exception as e:
-                logging.error(f'Error al enviar actualización de icono: {e}')
+                logging.error(f'Error al enviar actualizacion de icono: {e}')
             finally:
                 job_running = False
 
     def reconfigure_logging_if_needed(self):
+        """
+        Reconfigures the logging system if the current month has changed.
+
+        This method checks if the current month is different from the last recorded
+        logging month. If so, it creates a new directory for the logs of the new month,
+        generates new log file paths for debug and error logs, and reconfigures the
+        logging system to use these new files.
+
+        The log files are named using the current service version and are stored in
+        a "logs" subdirectory under the specified path.
+
+        Side Effects:
+            - Creates a new directory for the current month's logs if it doesn't exist.
+            - Updates the logging configuration to use new log files.
+            - Updates the `current_log_month` attribute to the new month.
+
+        Attributes:
+            self.path (str): The base path where the logs directory is located.
+            self.current_log_month (str): The month of the currently active log files.
+            SERVICE_VERSION (str): The version of the service, used in log file names.
+
+        Raises:
+            OSError: If the directory creation fails.
+        """
         new_month = datetime.today().strftime("%Y-%b")
         if new_month != self.current_log_month:
-            # Remove existing handlers
-            for handler in logging.getLogger().handlers[:]:
-                if handler:
-                    logging.getLogger().removeHandler(handler)
-                    handler.close()
-            
-            # Create new log folder and files for the new month.
-            logs_folder = os.path.join(find_root_directory(), 'logs')
-            logs_month_folder = os.path.join(logs_folder, new_month)
-            if not os.path.exists(logs_month_folder):
-                os.makedirs(logs_month_folder)
-            new_log_file = os.path.join(logs_month_folder, 'service_debug.log')
-            error_log_file = os.path.join(logs_month_folder, 'service_error.log')
-            
-            # Reconfigure logging
-            configure_logging(new_log_file, error_log_file)
+            month_folder = os.path.join(self.path, 'logs', new_month)
+            os.makedirs(month_folder, exist_ok=True)
+            debug_file = os.path.join(month_folder, f'servicio_reloj_de_asistencias_{SERVICE_VERSION}_debug.log')
+            error_file = os.path.join(month_folder, f'servicio_reloj_de_asistencias_{SERVICE_VERSION}_error.log')
+            self.configure_logging(debug_file, error_file)
             self.current_log_month = new_month
 
     def configure_schedule(self):
-        '''
-        Configure scheduled tasks based on the times loaded from the file.
-        '''
+        """
+        Configures scheduled tasks based on execution times loaded from a schedule file.
+        This method reads a schedule file to determine the times at which specific tasks 
+        should be executed. It supports two types of tasks:
+        - Managing device attendances.
+        - Updating device times.
+        The schedule file should contain lines specifying the execution times for each task, 
+        grouped under comments that indicate the task type. For example:
+            # gestionar_marcaciones_dispositivos
+            08:00
+            14:00
+            # actualizar_hora_dispositivos
+            12:00
+            18:00
+        Tasks are scheduled using the `schedule` library to run daily at the specified times.
+        Raises:
+            Exception: If there is an error loading the schedule file.
+        Notes:
+            - The schedule file must be named 'schedule.txt' and located in the root directory.
+            - Lines starting with '#' are treated as task type indicators.
+            - Non-comment lines are treated as execution times in HH:MM format.
+        """
         file_path = os.path.join(self.path, 'schedule.txt')
-        
-        logging.debug(not file_exists_in_folder('schedule.txt', file_path))
+        #logging.debug(not file_exists_in_folder('schedule.txt', file_path))
         if file_exists_in_folder('schedule.txt', file_path):
             # Path to the text file containing execution times
             file_path = os.path.join(find_root_directory(), 'schedule.txt')
-        logging.debug(file_path)
+        #logging.debug(file_path)
 
         try:
             content = load_from_file(file_path)  # Load content from the file
@@ -218,75 +273,101 @@ class SchedulerService(win32serviceutil.ServiceFramework):
                 elif current_task == "update":
                     update_hours.append(line)
 
+        attendances_manager = AttendancesManager()
         if manage_hours:
-            # Iterate over execution times for manage_device_attendances
+            # Iterate over execution times for manage_devices_attendances
             for hour_to_perform in manage_hours:
                 schedule.every().day.at(hour_to_perform).do(
-                    lambda: safe_execute(manage_device_attendances, from_service=True)
+                    lambda: self.safe_execute(attendances_manager.manage_devices_attendances)
                 )
 
+        hour_manager = HourManager()
         if update_hours:
             # Iterate over execution times for update_device_time
             for hour_to_perform in update_hours:
                 schedule.every().day.at(hour_to_perform).do(
-                    lambda: safe_execute(update_devices_time, from_service=True)
+                    lambda: self.safe_execute(hour_manager.manage_hour_devices)
                 )
     
-    def send_icon_update(self, color, host='localhost', port=5000):
-        print("Envío de actualización de icono")
+    def send_icon_update(self, color: str, host='localhost', port=5000):
+        """
+        Sends an icon update message to a specified host and port using a TCP socket.
+
+        Args:
+            color (str): The color to be sent as an update. It is encoded as a UTF-8 string.
+            host (str, optional): The hostname or IP address of the server to connect to. Defaults to 'localhost'.
+            port (int, optional): The port number of the server to connect to. Defaults to 5000.
+
+        Logs:
+            - Logs a debug message indicating the start of the icon update process.
+            - Logs an error message if an exception occurs during the process.
+
+        Raises:
+            Exception: If there is an error in creating the socket, connecting to the server, 
+                       or sending the data, it will be logged as an error.
+        """
+        logging.debug("Envio de actualizacion de icono")
         # Create a TCP client socket to send the update message.
         try:
-            client = original_socket.socket(original_socket.AF_INET, original_socket.SOCK_STREAM)
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client.connect((host, port))
             client.sendall(color.encode('utf-8'))
             client.close()
         except Exception as e:
-            print(f"Error al enviar actualización: {e}")
+            logging.error(f"Error al enviar actualizacion: {e}")
 
-def safe_execute(func, *args, **kwargs):
-    try:
-        func(*args, **kwargs)
-    except Exception as e:
-        logging.error(f"Error ejecutando {func.__name__}: {e}")
+    def configure_logging(self, debug_file, error_file):
+        """
+        Configures logging for the application by setting up a debug log file and an error log file.
+        This method clears any existing logging handlers to avoid duplicate or stale streams,
+        then configures a debug log file for detailed logging and an error log file for warnings
+        and errors.
+        Args:
+            debug_file (str): The file path for the debug log file where detailed logs will be written.
+            error_file (str): The file path for the error log file where warnings and errors will be logged.
+        Behavior:
+            - Removes all existing logging handlers to ensure a clean logging configuration.
+            - Sets up a debug log file with DEBUG level logging and a specific format.
+            - Adds a separate handler for warnings and errors, writing them to the specified error log file.
+        """
+        # Always clear existing handlers to avoid stale streams
+        logger = logging.getLogger()
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
+            handler.close()
 
-def service_is_installed(service_name):
-    try:
-        # Open the service control manager
-        scm = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_ALL_ACCESS)
+        # Configure basic debug log file
+        logging.basicConfig(
+            filename=debug_file,
+            level=logging.DEBUG,
+            format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s'
+        )
+
+        # Add handler for warnings and errors
+        error_handler = logging.FileHandler(error_file)
+        error_handler.setLevel(logging.WARNING)
+        error_handler.setFormatter(
+            logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        )
+        logger.addHandler(error_handler)
+
+    def safe_execute(self, func, *args, **kwargs):
+        """
+        Executes a given function safely, catching and logging any exceptions that occur.
+
+        Args:
+            func (callable): The function to be executed.
+            *args: Positional arguments to pass to the function.
+            **kwargs: Keyword arguments to pass to the function.
+
+        Logs:
+            Logs an error message if an exception is raised during the execution of the function.
+        """
         try:
-            # Try to open the service
-            service = win32service.OpenService(scm, service_name, win32service.SERVICE_QUERY_STATUS)
-            # If the service can be opened, it is installed
-            win32service.CloseServiceHandle(service)
-            return True
-        except win32service.error as e:
-            # If the error is ERROR_SERVICE_DOES_NOT_EXIST, the service is not installed
-            logging.warning("Servicio no instalado")
-            return False
-        finally:
-            win32service.CloseServiceHandle(scm)
-    except Exception as e:
-        print(f"Error al verificar el servicio: {e}")
-        return False
-    
-def check_and_install_service():
-    if not service_is_installed(svc_name):
-        # Install the service if it is not installed
-        try:
-            logging.debug(os.path.join(find_root_directory(), 'schedulerService.exe'))
-            exe_name = None
-            if os.path.isfile(os.path.join(find_root_directory(), 'schedulerService.exe')):
-                exe_name = os.path.join(find_root_directory(), 'schedulerService.exe')
-                logging.debug("EXE: "+exe_name)
-            win32serviceutil.InstallService(pythonClassString=svc_python_class, serviceName=svc_name, displayName=svc_display_name, exeName=exe_name, description=svc_description, startType=win32service.SERVICE_AUTO_START)
-            
+            func(*args, **kwargs)
         except Exception as e:
-            logging.error(f'Error al instalar el servicio {svc_name}: {e}')
-            return
-        logging.info(f'Servicio {svc_name} instalado correctamente')
-    else:
-        logging.info(f'Servicio {svc_name} ya instalado')
-        
+            logging.error(f"Error ejecutando {func.__name__}: {e}")
+
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         servicemanager.Initialize()
