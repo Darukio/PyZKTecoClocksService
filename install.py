@@ -23,18 +23,28 @@ import os
 import shutil
 
 def install_requirements():
-    # Borrar la carpeta venv si ya existe
+    """
+    Sets up a Python virtual environment and installs dependencies.
+    This function performs the following steps:
+    1. Deletes the existing virtual environment folder (`venv`) if it exists.
+    2. Creates a new virtual environment in the `venv` directory.
+    3. Determines the path to the Python executable within the virtual environment.
+    4. Installs the dependencies listed in the `requirements.txt` file using the virtual environment's `pip`.
+    Raises:
+        subprocess.CalledProcessError: If any subprocess command fails.
+    """
+    # Delete the venv folder if it already exists
     venv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "venv")
     if os.path.exists(venv_path):
         shutil.rmtree(venv_path)
 
-    # Crear un entorno virtual
+    # Create a virtual environment
     subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
 
-    # Obtener la ruta al ejecutable de Python en el entorno virtual
+    # Get the path to the Python executable in the virtual environment
     venv_python = os.path.join(venv_path, "Scripts", "python.exe") if sys.platform == "win32" else os.path.join(venv_path, "bin", "python")
 
-    # Instalar dependencias desde requirements.txt usando el pip del entorno virtual
+    # Install dependencies from requirements.txt using the virtual environment's pip
     subprocess.run([venv_python, "-m", "pip", "install", "-r", "requirements.txt"], check=True)
 
 if __name__ == "__main__":
