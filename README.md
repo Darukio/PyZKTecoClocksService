@@ -1,5 +1,5 @@
 # PyZKTecoClocks
-[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://darukio.github.io/PyZKTecoClocks/)
+[![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://darukio.github.io/PyZKTecoClocks/) [![Program](https://img.shields.io/badge/program-online-blue.svg)](https://github.com/Darukio/PyZKTecoClocks)
 
 ## [![Español](https://img.shields.io/badge/language-es-red.svg)](#)
 
